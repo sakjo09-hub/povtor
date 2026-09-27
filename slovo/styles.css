@@ -119,7 +119,9 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 24px 2px 12px; }
 .section-head h2 { margin: 0; font-size: 19px; }
+.section-actions { display: flex; align-items: center; gap: 14px; }
 .text-btn { border: 0; background: transparent; color: var(--blue); font-size: 14px; font-weight: 720; padding: 8px 0; cursor: pointer; }
+.muted-action { color: var(--muted); }
 
 .set-list { display: grid; gap: 12px; }
 .set-card {
@@ -237,6 +239,7 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .word-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 14px 14px 14px 16px; border-radius: 17px; background: var(--surface); border: 1px solid var(--line); }
 .word-prompt { font-size: 16px; font-weight: 690; }
 .word-answer { margin-top: 4px; color: var(--muted); font-size: 13px; }
+.word-answer.is-concealed { color: #9aa4b2; font-style: italic; }
 .row-menu { width: 37px; height: 37px; border: 0; border-radius: 12px; background: #f0f3f8; font-size: 18px; cursor: pointer; }
 
 .quiz-page { min-height: calc(100dvh - 170px); display: flex; flex-direction: column; }

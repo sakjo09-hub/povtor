@@ -12,7 +12,7 @@
   const importFile = document.querySelector("#importFile");
 
   let state = loadState();
-  let view = { route: "home", setId: null };
+  let view = { route: "home", setId: null, showAnswers: false };
   let quiz = null;
   let draftHidden = [];
   let draftStressIndex = null;
@@ -208,12 +208,18 @@
           <div class="mini-stat"><strong>${mistakes}</strong><span>на повторе</span></div>
         </div>
       </section>
-      <div class="section-head"><h2>Слова</h2><button class="text-btn" type="button" data-action="set-menu">Изменить</button></div>
-      ${set.items.length ? `<div class="word-list">${set.items.map(item => wordRow(item, set.type)).join("")}</div>` : `<section class="empty-state"><div class="empty-icon">А</div><h2>Пока пусто</h2><p>Добавьте первое слово в этот набор.</p><button class="primary-btn" type="button" data-action="add-words">Добавить слово</button></section>`}
+      <div class="section-head">
+        <h2>Слова</h2>
+        <div class="section-actions">
+          ${set.items.length ? `<button class="text-btn answer-toggle" type="button" data-action="toggle-answers">${view.showAnswers ? "Скрыть ответы" : "Показать ответы"}</button>` : ""}
+          <button class="text-btn muted-action" type="button" data-action="set-menu">Изменить</button>
+        </div>
+      </div>
+      ${set.items.length ? `<div class="word-list">${set.items.map(item => wordRow(item, set.type, view.showAnswers)).join("")}</div>` : `<section class="empty-state"><div class="empty-icon">А</div><h2>Пока пусто</h2><p>Добавьте первое слово в этот набор.</p><button class="primary-btn" type="button" data-action="add-words">Добавить слово</button></section>`}
     `;
   }
 
-  function wordRow(item, type) {
+  function wordRow(item, type, showAnswer = false) {
     let prompt = item.prompt;
     let answer = item.answer;
     if (type === "letters") {
@@ -228,7 +234,10 @@
     }
     if (type === "stress") { prompt = item.plain; answer = formatStress(item); }
     if (type === "spelling") answer = answerLabel(item.answer);
-    return `<div class="word-row"><div><div class="word-prompt">${esc(prompt)}</div><div class="word-answer">${esc(answer)}</div></div><button class="row-menu" type="button" aria-label="Удалить слово" data-delete-item="${item.id}">×</button></div>`;
+    const answerMarkup = showAnswer
+      ? `<div class="word-answer is-revealed">${esc(answer)}</div>`
+      : `<div class="word-answer is-concealed">Ответ скрыт</div>`;
+    return `<div class="word-row"><div><div class="word-prompt">${esc(prompt)}</div>${answerMarkup}</div><button class="row-menu" type="button" aria-label="Удалить слово" data-delete-item="${item.id}">×</button></div>`;
   }
 
   function renderReview() {
@@ -678,7 +687,7 @@
   }
 
   function navigate(route, setId = null) {
-    view = { route, setId };
+    view = { route, setId, showAnswers: false };
     render();
     app.focus({ preventScroll: true });
   }
@@ -710,6 +719,10 @@
     if (action === "new-set") showNewSet();
     else if (action === "add-words") showAddWords();
     else if (action === "set-menu") showSetMenu();
+    else if (action === "toggle-answers") {
+      view.showAnswers = !view.showAnswers;
+      render();
+    }
     else if (action === "start-set") {
       const set = state.sets.find(entry => entry.id === view.setId);
       startQuiz(set.items.map(item => ({ ...item, type: set.type, setId: set.id })), set.title);
