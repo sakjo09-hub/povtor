@@ -861,6 +861,8 @@
 
   document.addEventListener("keydown", event => { if (event.key === "Escape" && modalLayer.classList.contains("is-open")) closeSheet(); });
 
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").then(registration => registration.update()).catch(() => {});
+  });
   render();
 })();
