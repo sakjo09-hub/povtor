@@ -16,6 +16,7 @@
   let quiz = null;
   let draftHidden = [];
   let draftStressIndex = null;
+  let draftDoubleIndex = null;
   let addedInSheet = 0;
 
   function uid() {
@@ -24,7 +25,7 @@
 
   function initialState() {
     return {
-      version: 1,
+      version: 2,
       createdAt: new Date().toISOString(),
       activityDates: [],
       sets: [
@@ -47,7 +48,8 @@
         {
           id: uid(), title: "Ударения", type: "stress", createdAt: new Date().toISOString(),
           items: [parseStress("звонИт"), parseStress("красИвее"), parseStress("тОрты")].filter(Boolean)
-        }
+        },
+        defaultDoubleSet()
       ]
     };
   }
@@ -60,10 +62,34 @@
     return makeItem({ word: word.trim(), hidden: [...new Set(hidden)].sort((a, b) => a - b) });
   }
 
+  function makeDoubleItem(word, selectedIndex) {
+    const data = doubleRun(word.trim(), selectedIndex);
+    return makeItem({ word: word.trim(), letter: data.letter, start: data.start, count: data.count });
+  }
+
+  function defaultDoubleSet() {
+    return {
+      id: uid(), title: "Одна или две буквы", type: "double", createdAt: new Date().toISOString(),
+      items: [
+        makeDoubleItem("деревянный", 6),
+        makeDoubleItem("ветреный", 5),
+        makeDoubleItem("аккуратный", 1),
+        makeDoubleItem("картина", 0)
+      ]
+    };
+  }
+
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved && Array.isArray(saved.sets)) return saved;
+      if (saved && Array.isArray(saved.sets)) {
+        if ((saved.version || 1) < 2) {
+          saved.version = 2;
+          if (!saved.sets.some(set => set.type === "double")) saved.sets.push(defaultDoubleSet());
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        }
+        return saved;
+      }
     } catch (_) {}
     const fresh = initialState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
@@ -84,6 +110,7 @@
 
   const typeInfo = {
     letters: { title: "Пропущенные буквы", short: "Буквы", icon: "А_", className: "letters" },
+    double: { title: "Одна или две буквы", short: "Одна или две", icon: "Н/НН", className: "double" },
     spelling: { title: "Слитно или раздельно", short: "Написание", icon: "↔", className: "spelling" },
     stress: { title: "Ударения", short: "Ударения", icon: "А́", className: "stress" }
   };
@@ -194,6 +221,11 @@
       prompt = data.masked;
       answer = data.word;
     }
+    if (type === "double") {
+      const data = doubleData(item);
+      prompt = data.masked;
+      answer = `${data.word} · ${data.answer}`;
+    }
     if (type === "stress") { prompt = item.plain; answer = formatStress(item); }
     if (type === "spelling") answer = answerLabel(item.answer);
     return `<div class="word-row"><div><div class="word-prompt">${esc(prompt)}</div><div class="word-answer">${esc(answer)}</div></div><button class="row-menu" type="button" aria-label="Удалить слово" data-delete-item="${item.id}">×</button></div>`;
@@ -202,15 +234,19 @@
   function renderReview() {
     setHeader(false);
     const mistakes = mistakeItems();
-    const bySet = state.sets.map(set => ({ set, count: set.items.filter(item => item.mistakes > 0).length })).filter(entry => entry.count);
+    const availableSets = state.sets.map(set => {
+      const errors = set.items.filter(item => item.mistakes > 0).length;
+      return { set, count: mistakes.length ? errors : set.items.length };
+    }).filter(entry => entry.count);
+    const repeatCount = mistakes.length || allItems().length;
     app.innerHTML = `
       <section class="page-head"><div><p class="eyebrow">Работа над ошибками</p><h1>Повтор</h1></div></section>
-      ${mistakes.length ? `
-        <section class="summary-card"><div class="summary-row"><div><div class="summary-title">Нужно закрепить</div><div class="summary-value">${mistakes.length} ${wordForm(mistakes.length, ["слово", "слова", "слов"])}</div><div class="summary-note">Сначала покажем самые частые ошибки</div></div><div class="summary-badge">↻</div></div></section>
-        <button class="primary-btn full-width" type="button" data-action="start-mistakes">Повторить все ошибки</button>
-        <div class="section-head"><h2>По наборам</h2></div>
-        ${bySet.map(({set, count}) => `<div class="review-card"><div class="review-count">${count}</div><div class="review-copy"><h3>${esc(set.title)}</h3><p>${typeInfo[set.type].title}</p></div><button class="small-primary" type="button" data-review-set="${set.id}">Повторить</button></div>`).join("")}
-      ` : `<section class="empty-state"><div class="empty-icon">✓</div><h2>Ошибок пока нет</h2><p>Пройдите любую тренировку — сложные слова автоматически появятся здесь.</p><button class="primary-btn" type="button" data-route="home">К наборам</button></section>`}
+      ${repeatCount ? `
+        <section class="summary-card"><div class="summary-row"><div><div class="summary-title">${mistakes.length ? "Нужно закрепить" : "Быстрый повтор"}</div><div class="summary-value">${repeatCount} ${wordForm(repeatCount, ["слово", "слова", "слов"])}</div><div class="summary-note">${mistakes.length ? "Сначала покажем слова, где были ошибки" : "Можно освежить все слова в случайном порядке"}</div></div><div class="summary-badge">↻</div></div></section>
+        <button class="primary-btn full-width" type="button" data-action="${mistakes.length ? "start-mistakes" : "start-all"}">${mistakes.length ? "Повторить все ошибки" : "Повторить все слова"}</button>
+        <div class="section-head"><h2>${mistakes.length ? "Ошибки по наборам" : "Выберите набор"}</h2></div>
+        ${availableSets.map(({set, count}) => `<div class="review-card"><div class="review-count">${count}</div><div class="review-copy"><h3>${esc(set.title)}</h3><p>${typeInfo[set.type].title}</p></div><button class="small-primary" type="button" data-review-set="${set.id}">Повторить</button></div>`).join("")}
+      ` : `<section class="empty-state"><div class="empty-icon">＋</div><h2>Пока нечего повторять</h2><p>Создайте набор и добавьте в него несколько слов.</p><button class="primary-btn" type="button" data-route="home">Создать набор</button></section>`}
     `;
   }
 
@@ -233,7 +269,7 @@
       <div class="stat-card stat-list">${state.sets.length ? state.sets.map(set => {
         const attempts = set.items.reduce((sum, item) => sum + item.attempts, 0);
         const correct = set.items.reduce((sum, item) => sum + item.correct, 0);
-        return `<div class="stat-row"><div><strong>${esc(set.title)}</strong><br><span>${set.items.length} ${wordForm(set.items.length, ["слово", "слова", "слов"])}</span></div><span class="accuracy">${attempts ? Math.round(correct / attempts * 100) + "%" : "—"}</span></div>`;
+        return `<button class="stat-set-row" type="button" data-open-set="${set.id}"><span><strong>${esc(set.title)}</strong><small>${set.items.length} ${wordForm(set.items.length, ["слово", "слова", "слов"])}</small></span><span class="stat-set-end"><span class="accuracy">${attempts ? Math.round(correct / attempts * 100) + "%" : "—"}</span><span class="chevron">›</span></span></button>`;
       }).join("") : `<p class="subtext">Создайте первый набор, чтобы здесь появилась статистика.</p>`}</div>
     `;
   }
@@ -257,6 +293,9 @@
       const choices = data.missing.length === 1 ? letterChoices(data.missing) : [];
       answerUI = `<div class="quiz-prompt">${highlightGaps(data.masked)}</div>
         ${choices.length ? `<p class="quiz-instruction letter-instruction">Выберите пропущенную букву</p><div class="letter-choice-grid">${choices.map(choice => `<button class="letter-choice-btn" type="button" data-letter-choice="${esc(choice)}">${esc(choice)}</button>`).join("")}</div>` : `<p class="quiz-instruction letter-instruction">Введите только пропущенные буквы по порядку</p><input class="answer-input short-answer" id="answerInput" maxlength="${data.missing.length}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${"_ ".repeat(data.missing.length).trim()}" aria-label="Введите только пропущенные буквы"/><button class="primary-btn full-width" type="button" data-action="check-text">Проверить</button>`}`;
+    } else if (type === "double") {
+      const data = doubleData(item);
+      answerUI = `<div class="quiz-prompt">${highlightGaps(data.masked)}</div><p class="quiz-instruction letter-instruction">Одна буква или две?</p><div class="double-choice-grid"><button class="double-choice-btn" type="button" data-double-choice="${esc(data.letter)}">${esc(data.letter)}</button><button class="double-choice-btn" type="button" data-double-choice="${esc(data.letter.repeat(2))}">${esc(data.letter.repeat(2))}</button></div>`;
     } else if (type === "spelling") {
       answerUI = `<div class="quiz-prompt">${esc(item.prompt).replaceAll("/", "<span class=\"gap\"> / </span>")}</div><div class="choice-grid"><button class="choice-btn" type="button" data-choice="together">Слитно</button><button class="choice-btn" type="button" data-choice="separate">Раздельно</button><button class="choice-btn" type="button" data-choice="hyphen">Через дефис</button><button class="choice-btn" type="button" data-choice="skip">Не знаю</button></div>`;
     } else {
@@ -297,6 +336,33 @@
     };
   }
 
+  function doubleRun(word, selectedIndex) {
+    const chars = [...String(word)];
+    const index = Number(selectedIndex);
+    const letter = chars[index] || "";
+    let start = index;
+    let end = index;
+    while (start > 0 && chars[start - 1].toLocaleLowerCase("ru-RU") === letter.toLocaleLowerCase("ru-RU")) start -= 1;
+    while (end + 1 < chars.length && chars[end + 1].toLocaleLowerCase("ru-RU") === letter.toLocaleLowerCase("ru-RU")) end += 1;
+    return { letter, start, count: end - start + 1 };
+  }
+
+  function doubleData(item) {
+    const word = String(item.word || "").trim();
+    const chars = [...word];
+    const start = Number(item.start);
+    const count = Number(item.count) || 1;
+    const letter = item.letter || chars[start] || "";
+    return {
+      word,
+      letter,
+      start,
+      count,
+      answer: letter.repeat(count),
+      masked: [...chars.slice(0, start), "_", ...chars.slice(start + count)].join("")
+    };
+  }
+
   function letterChoices(correct) {
     const isUpper = correct === correct.toLocaleUpperCase("ru-RU");
     const lower = correct.toLocaleLowerCase("ru-RU");
@@ -314,6 +380,7 @@
     const type = item.type || findSetForItem(item.id)?.type;
     let isCorrect = false;
     if (type === "letters") isCorrect = String(userAnswer).trim().toLocaleLowerCase("ru-RU") === letterData(item).missing.toLocaleLowerCase("ru-RU");
+    else if (type === "double") isCorrect = String(userAnswer).toLocaleLowerCase("ru-RU") === doubleData(item).answer.toLocaleLowerCase("ru-RU");
     else if (type === "spelling") isCorrect = userAnswer === item.answer;
     else isCorrect = Number(userAnswer) === Number(item.stressIndex);
 
@@ -344,6 +411,7 @@
     if (type === "stress") return formatStress(item);
     if (type === "spelling") return spellingResult(item.prompt, item.answer);
     if (type === "letters") return letterData(item).word;
+    if (type === "double") return doubleData(item).word;
     return item.answer;
   }
 
@@ -366,7 +434,7 @@
       <form id="newSetForm">
         <div class="field"><label for="setTitle">Название</label><input id="setTitle" name="title" maxlength="60" placeholder="Например, Слова к диктанту" required /></div>
         <div class="field"><span class="field-label">Тип заданий</span><div class="type-grid">
-          ${typeRadio("letters", true)}${typeRadio("spelling")}${typeRadio("stress")}
+          ${typeRadio("letters", true)}${typeRadio("double")}${typeRadio("spelling")}${typeRadio("stress")}
         </div></div>
         <button class="primary-btn full-width" type="submit">Создать набор</button>
       </form>`);
@@ -375,7 +443,8 @@
 
   function typeRadio(type, checked = false) {
     const info = typeInfo[type];
-    return `<div class="type-option"><input id="type-${type}" type="radio" name="type" value="${type}" ${checked ? "checked" : ""}/><label for="type-${type}"><span class="set-icon ${info.className}">${info.icon}</span><span class="type-copy"><strong>${info.title}</strong><span>${type === "letters" ? "Вставить буквы в слово" : type === "spelling" ? "Выбрать способ написания" : "Поставить ударение"}</span></span><span class="radio-dot"></span></label></div>`;
+    const descriptions = { letters: "Вставить пропущенную букву", double: "Выбрать н или нн, к или кк", spelling: "Выбрать способ написания", stress: "Поставить ударение" };
+    return `<div class="type-option"><input id="type-${type}" type="radio" name="type" value="${type}" ${checked ? "checked" : ""}/><label for="type-${type}"><span class="set-icon ${info.className}">${info.icon}</span><span class="type-copy"><strong>${info.title}</strong><span>${descriptions[type]}</span></span><span class="radio-dot"></span></label></div>`;
   }
 
   function showAddWords() {
@@ -383,6 +452,7 @@
     if (!set) return;
     draftHidden = [];
     draftStressIndex = null;
+    draftDoubleIndex = null;
     const commonHead = `<div class="sheet-head"><div><p class="eyebrow">${typeInfo[set.type].title}</p><h2>Добавить слово</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>`;
     if (set.type === "letters") {
       openSheet(`${commonHead}<form id="addLettersForm">
@@ -392,6 +462,14 @@
         <button class="primary-btn full-width" id="addWordButton" type="submit" disabled>Добавить слово</button>
       </form>${addedFooter()}`);
       setTimeout(() => document.querySelector("#letterWord")?.focus(), 100);
+    } else if (set.type === "double") {
+      openSheet(`${commonHead}<form id="addDoubleForm">
+        <div class="field"><label for="doubleWord">Слово целиком</label><input id="doubleWord" name="word" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, деревянный" required /><p class="field-hint">Нажмите на букву — если она двойная, выделятся сразу обе.</p></div>
+        <div class="field"><span class="field-label">Какую букву проверять?</span><div class="letter-picker empty-picker" id="doublePicker">Сначала введите слово</div></div>
+        <div class="add-preview" id="doublePreview"><span>В задании будет:</span><strong>—</strong></div>
+        <button class="primary-btn full-width" id="addDoubleButton" type="submit" disabled>Добавить слово</button>
+      </form>${addedFooter()}`);
+      setTimeout(() => document.querySelector("#doubleWord")?.focus(), 100);
     } else if (set.type === "spelling") {
       openSheet(`${commonHead}<form id="addSpellingForm">
         <div class="split-fields"><div class="field"><label for="spellingPart1">Первая часть</label><input id="spellingPart1" name="part1" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="в" required /></div><div class="join-mark">+</div><div class="field"><label for="spellingPart2">Вторая часть</label><input id="spellingPart2" name="part2" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="общем" required /></div></div>
@@ -463,6 +541,22 @@
     if (preview) preview.textContent = masked || "—";
     const submit = document.querySelector("#addWordButton");
     if (submit) submit.disabled = !word.trim() || !draftHidden.length;
+  }
+
+  function renderDoublePicker(word) {
+    const picker = document.querySelector("#doublePicker");
+    if (!picker) return;
+    const chars = [...word];
+    if (draftDoubleIndex !== null && (!chars[draftDoubleIndex] || !/[а-яё]/i.test(chars[draftDoubleIndex]))) draftDoubleIndex = null;
+    const selected = draftDoubleIndex === null ? null : doubleRun(word, draftDoubleIndex);
+    picker.classList.toggle("empty-picker", !chars.length);
+    picker.innerHTML = chars.length ? chars.map((char, index) => /[а-яё]/i.test(char)
+      ? `<button class="picker-letter ${selected && index >= selected.start && index < selected.start + selected.count ? "is-selected" : ""}" type="button" data-double-index="${index}">${esc(char)}</button>`
+      : `<span class="picker-letter is-disabled">${esc(char)}</span>`).join("") : "Сначала введите слово";
+    const preview = document.querySelector("#doublePreview strong");
+    if (preview) preview.textContent = selected ? doubleData({ word, letter: selected.letter, start: selected.start, count: selected.count }).masked : "—";
+    const submit = document.querySelector("#addDoubleButton");
+    if (submit) submit.disabled = !word.trim() || !selected || selected.count > 2;
   }
 
   function renderStressPicker(word) {
@@ -620,6 +714,7 @@
       const set = state.sets.find(entry => entry.id === view.setId);
       startQuiz(set.items.map(item => ({ ...item, type: set.type, setId: set.id })), set.title);
     } else if (action === "start-mistakes") startQuiz(mistakeItems(), "Повтор ошибок", "review");
+    else if (action === "start-all") startQuiz(allItems(), "Быстрый повтор", "review");
     else if (action === "check-text") checkAnswer(document.querySelector("#answerInput")?.value || "");
     else if (action === "next-question") {
       if (quiz.index + 1 >= quiz.items.length) navigate("result", view.setId);
@@ -631,6 +726,8 @@
     if (choice) checkAnswer(choice);
     const letterChoice = event.target.closest("[data-letter-choice]")?.dataset.letterChoice;
     if (letterChoice !== undefined) checkAnswer(letterChoice);
+    const doubleChoice = event.target.closest("[data-double-choice]")?.dataset.doubleChoice;
+    if (doubleChoice !== undefined) checkAnswer(doubleChoice);
     const stressIndex = event.target.closest("[data-stress-index]")?.dataset.stressIndex;
     if (stressIndex !== undefined) checkAnswer(stressIndex);
     const deleteId = event.target.closest("[data-delete-item]")?.dataset.deleteItem;
@@ -641,7 +738,9 @@
     const reviewSetId = event.target.closest("[data-review-set]")?.dataset.reviewSet;
     if (reviewSetId) {
       const set = state.sets.find(entry => entry.id === reviewSetId);
-      startQuiz(set.items.filter(item => item.mistakes > 0).map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
+      const errors = set.items.filter(item => item.mistakes > 0);
+      const selectedItems = errors.length ? errors : set.items;
+      startQuiz(selectedItems.map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
     }
   });
 
@@ -672,11 +771,17 @@
       renderStressPicker(document.querySelector("#stressWordInput")?.value || "");
       return;
     }
+    const doubleIndex = event.target.closest("[data-double-index]")?.dataset.doubleIndex;
+    if (doubleIndex !== undefined) {
+      draftDoubleIndex = Number(doubleIndex);
+      renderDoublePicker(document.querySelector("#doubleWord")?.value || "");
+      return;
+    }
     const action = event.target.closest("[data-action]")?.dataset.action;
     if (action === "export") exportData();
     else if (action === "import") importFile.click();
     else if (action === "reset" && confirm("Удалить все наборы и результаты? Это действие нельзя отменить.")) {
-      state = { version: 1, createdAt: new Date().toISOString(), activityDates: [], sets: [] };
+      state = { version: 2, createdAt: new Date().toISOString(), activityDates: [], sets: [] };
       saveState(); closeSheet(); navigate("home"); toast("Все данные удалены");
     } else if (action === "delete-set" && confirm("Удалить набор вместе со словами и статистикой?")) {
       state.sets = state.sets.filter(set => set.id !== view.setId); saveState(); closeSheet(); navigate("home"); toast("Набор удалён");
@@ -685,6 +790,7 @@
 
   modalLayer.addEventListener("input", event => {
     if (event.target.id === "letterWord") renderLetterPicker(event.target.value);
+    else if (event.target.id === "doubleWord") renderDoublePicker(event.target.value);
     else if (event.target.id === "stressWordInput") renderStressPicker(event.target.value);
     else if (event.target.id === "spellingPart1" || event.target.id === "spellingPart2") updateSpellingPreview();
   });
@@ -706,6 +812,14 @@
       if (!word || !draftHidden.length) return toast("Выберите хотя бы одну букву для пропуска");
       set.items.push(makeLettersItem(word, draftHidden)); saveState(); noteAdded();
       form.reset(); draftHidden = []; renderLetterPicker(""); document.querySelector("#letterWord")?.focus();
+    } else if (form.id === "addDoubleForm") {
+      const set = state.sets.find(entry => entry.id === view.setId);
+      const word = new FormData(form).get("word").trim();
+      if (!word || draftDoubleIndex === null) return toast("Нажмите на букву, которую нужно проверить");
+      const run = doubleRun(word, draftDoubleIndex);
+      if (run.count > 2) return toast("В этом месте больше двух одинаковых букв");
+      set.items.push(makeDoubleItem(word, draftDoubleIndex)); saveState(); noteAdded();
+      form.reset(); draftDoubleIndex = null; renderDoublePicker(""); document.querySelector("#doubleWord")?.focus();
     } else if (form.id === "addSpellingForm") {
       const set = state.sets.find(entry => entry.id === view.setId);
       const data = new FormData(form);

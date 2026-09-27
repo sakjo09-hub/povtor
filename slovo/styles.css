@@ -140,6 +140,7 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .set-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 16px; background: var(--blue-soft); color: var(--blue); font-family: Georgia, serif; font-size: 20px; font-weight: 700; }
 .set-icon.spelling { background: var(--green-soft); color: var(--green); font-family: inherit; }
 .set-icon.stress { background: var(--amber-soft); color: var(--amber); }
+.set-icon.double { background: #eee9ff; color: #694dc5; font-family: inherit; font-size: 14px; letter-spacing: -.04em; }
 .set-card > span:nth-child(2) { display: block; min-width: 0; }
 .set-title { display: block; font-size: 16px; font-weight: 760; margin-bottom: 5px; }
 .set-meta { display: block; }
@@ -256,6 +257,9 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .letter-choice-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
 .letter-choice-btn { min-height: 66px; border: 1px solid #ced8e7; border-radius: 18px; color: var(--ink); background: #f9fbfe; font-family: Georgia, serif; font-size: 27px; font-weight: 700; cursor: pointer; }
 .letter-choice-btn:active { transform: scale(.96); border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+.double-choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 360px; margin: 0 auto; }
+.double-choice-btn { min-height: 78px; border: 1px solid #cfc8ed; border-radius: 20px; color: #5d43b7; background: #f7f4ff; font-family: Georgia, serif; font-size: 32px; font-weight: 750; cursor: pointer; }
+.double-choice-btn:active { transform: scale(.97); color: white; background: #6b52c9; }
 .short-answer { max-width: 210px; letter-spacing: .22em; }
 .stress-word { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 1px; margin: 0 auto 29px; }
 .stress-letter { position: relative; border: 0; padding: 2px 1px 7px; background: transparent; font-family: Georgia, serif; font-size: clamp(38px, 11vw, 54px); line-height: 1; cursor: default; }
@@ -294,6 +298,14 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .stat-small strong { display: block; font-size: 27px; margin: 13px 0 4px; }
 .stat-small span { color: var(--muted); font-size: 13px; }
 .stat-list { display: grid; gap: 10px; }
+.stat-set-row { width: 100%; min-height: 58px; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 14px; color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.stat-set-row:last-child { border-bottom: 0; }
+.stat-set-row:active { background: var(--surface-soft); }
+.stat-set-row strong, .stat-set-row small { display: block; }
+.stat-set-row strong { margin-bottom: 5px; font-size: 15px; }
+.stat-set-row small { color: var(--muted); font-size: 13px; }
+.stat-set-end { display: flex; align-items: center; gap: 9px; }
+.stat-set-end .chevron { font-size: 22px; }
 .stat-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
 .stat-row + .stat-row { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 .stat-row strong { font-size: 15px; }

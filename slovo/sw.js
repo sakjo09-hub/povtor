@@ -1,4 +1,4 @@
-const CACHE = "povtor-v4";
+const CACHE = "povtor-v5";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./favicon.svg"];
 
 self.addEventListener("install", event => {
