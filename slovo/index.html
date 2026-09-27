@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f7fb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Повтор" />
+    <meta name="description" content="Личные тренировки по русскому языку: буквы, слитное и раздельное написание, ударения." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Повтор — личные тренировки</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="icon-btn is-hidden" id="backButton" type="button" aria-label="Назад">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div class="brand" id="brand">
+          <span class="brand-mark">П</span>
+          <span>Повтор</span>
+        </div>
+        <div class="topbar-spacer"></div>
+        <button class="icon-btn" id="settingsButton" type="button" aria-label="Настройки и резервная копия">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.58 15 1.7 1.7 0 0 0 3 14H3v-4h.09A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.58 1.7 1.7 0 0 0 10 3h4v.09a1.7 1.7 0 0 0 1.03 1.49 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06A1.7 1.7 0 0 0 19.4 9c.15.6.7 1.03 1.32 1.03H21v4h-.28c-.62 0-1.17.42-1.32 1Z"/></svg>
+        </button>
+      </header>
+
+      <main id="app" tabindex="-1"></main>
+
+      <nav class="bottom-nav" id="bottomNav" aria-label="Основная навигация">
+        <button class="nav-item is-active" type="button" data-route="home">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg>
+          <span>Наборы</span>
+        </button>
+        <button class="nav-item" type="button" data-route="review">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.34-5.66L4 8.68"/><path d="M4 4v4.68h4.68"/><path d="M12 8v4l2.5 1.5"/></svg>
+          <span>Повтор</span>
+        </button>
+        <button class="nav-item" type="button" data-route="stats">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/></svg>
+          <span>Прогресс</span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="modal-layer" id="modalLayer" aria-hidden="true"></div>
+    <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+    <input id="importFile" type="file" accept="application/json" hidden />
+    <script src="app.js"></script>
+  </body>
+</html>

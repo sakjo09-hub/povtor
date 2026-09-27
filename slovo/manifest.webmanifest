@@ -1,0 +1,15 @@
+{
+  "name": "Повтор — личные тренировки",
+  "short_name": "Повтор",
+  "description": "Наборы слов и тренировки по русскому языку",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f7fb",
+  "theme_color": "#f4f7fb",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
