@@ -150,11 +150,15 @@
     return state.sets.flatMap(set => set.items.map(item => ({ ...item, setId: set.id, setTitle: set.title, type: set.type })));
   }
 
-  function totals() {
-    const items = allItems();
-    const attempts = items.reduce((sum, item) => sum + item.attempts, 0);
-    const correct = items.reduce((sum, item) => sum + item.correct, 0);
-    return { words: items.length, attempts, correct, accuracy: attempts ? Math.round(correct / attempts * 100) : 0 };
+  function learningStats(items = allItems()) {
+    const needsRepeat = items.filter(item => item.mistakes > 0).length;
+    const learned = items.filter(item => item.attempts > 0 && item.mistakes === 0).length;
+    return {
+      words: items.length,
+      learned,
+      needsRepeat,
+      untouched: Math.max(0, items.length - learned - needsRepeat)
+    };
   }
 
   function mistakeItems() {
@@ -182,7 +186,10 @@
 
   function renderHome() {
     setHeader(false);
-    const total = totals();
+    const progress = learningStats();
+    const headline = progress.needsRepeat
+      ? `${progress.needsRepeat} ${wordForm(progress.needsRepeat, ["слово", "слова", "слов"])}`
+      : `${progress.words} ${wordForm(progress.words, ["слово", "слова", "слов"])}`;
     app.innerHTML = `
       <section class="page-head">
         <div><p class="eyebrow">Личная подборка</p><h1>Мои наборы</h1></div>
@@ -190,11 +197,11 @@
       <section class="summary-card">
         <div class="summary-row">
           <div>
-            <div class="summary-title">Сегодня можно повторить</div>
-            <div class="summary-value">${total.words} ${wordForm(total.words, ["слово", "слова", "слов"])}</div>
-            <div class="summary-note">Все данные хранятся на этом устройстве</div>
+            <div class="summary-title">${progress.needsRepeat ? "Нужно повторить" : "В вашей подборке"}</div>
+            <div class="summary-value">${headline}</div>
+            <div class="summary-note">${progress.needsRepeat ? "Ошибки собраны в разделе «Повтор»" : "Можно начать тренировку с любого набора"}</div>
           </div>
-          <div class="summary-badge">${total.attempts ? `${total.accuracy}%` : "—"}</div>
+          <div class="summary-badge">${progress.needsRepeat ? "↻" : "✓"}</div>
         </div>
       </section>
       <div class="section-head"><h2>Наборы</h2><button class="text-btn" type="button" data-action="new-set">Добавить</button></div>
@@ -205,12 +212,11 @@
 
   function setCard(set) {
     const info = typeInfo[set.type];
-    const attempts = set.items.reduce((sum, item) => sum + item.attempts, 0);
-    const correct = set.items.reduce((sum, item) => sum + item.correct, 0);
-    const accuracy = attempts ? ` · ${Math.round(correct / attempts * 100)}% верно` : "";
+    const progress = learningStats(set.items);
+    const status = progress.needsRepeat ? ` · ${progress.needsRepeat} на повторе` : "";
     return `<button class="set-card" type="button" data-open-set="${set.id}">
       <span class="set-icon ${info.className}">${info.icon}</span>
-      <span><span class="set-title">${esc(set.title)}</span><span class="set-meta">${set.items.length} ${wordForm(set.items.length, ["слово", "слова", "слов"])}${accuracy}</span></span>
+      <span><span class="set-title">${esc(set.title)}</span><span class="set-meta">${set.items.length} ${wordForm(set.items.length, ["слово", "слова", "слов"])}${status}</span></span>
       <span class="chevron">›</span>
     </button>`;
   }
@@ -224,9 +230,7 @@
     const set = state.sets.find(entry => entry.id === view.setId);
     if (!set) return navigate("home");
     const info = typeInfo[set.type];
-    const attempts = set.items.reduce((sum, item) => sum + item.attempts, 0);
-    const correct = set.items.reduce((sum, item) => sum + item.correct, 0);
-    const mistakes = set.items.filter(item => item.mistakes > 0).length;
+    const progress = learningStats(set.items);
     app.innerHTML = `
       <section class="detail-card">
         <div class="detail-top"><span class="set-icon ${info.className}">${info.icon}</span><div><p class="eyebrow">${info.title}</p><h1>${esc(set.title)}</h1><p class="subtext">${set.items.length} ${wordForm(set.items.length, ["слово", "слова", "слов"])}</p></div></div>
@@ -234,11 +238,7 @@
           <button class="primary-btn" type="button" data-action="start-set" ${set.items.length ? "" : "disabled"}>Начать тренировку</button>
           <button class="secondary-btn" type="button" data-action="add-words">Добавить слово</button>
         </div>
-        <div class="mini-stats">
-          <div class="mini-stat"><strong>${attempts}</strong><span>ответов</span></div>
-          <div class="mini-stat"><strong>${attempts ? Math.round(correct / attempts * 100) : "—"}${attempts ? "%" : ""}</strong><span>точность</span></div>
-          <div class="mini-stat"><strong>${mistakes}</strong><span>на повторе</span></div>
-        </div>
+        ${progress.needsRepeat ? `<div class="review-strip"><span><strong>${progress.needsRepeat}</strong> ${wordForm(progress.needsRepeat, ["слово нужно", "слова нужно", "слов нужно"])} повторить</span><button type="button" data-action="repeat-set-mistakes">Повторить ошибки</button></div>` : ""}
       </section>
       <div class="section-head">
         <h2>Слова</h2>
@@ -298,24 +298,25 @@
 
   function renderStats() {
     setHeader(false);
-    const total = totals();
-    const activeDays = [...new Set(state.activityDates || [])].length;
+    const progress = learningStats();
+    const completed = progress.words ? Math.round(progress.learned / progress.words * 100) : 0;
     app.innerHTML = `
-      <section class="page-head"><div><p class="eyebrow">Результаты</p><h1>Прогресс</h1></div></section>
-      <div class="stats-hero">
-        <div class="stat-big">Точность<strong>${total.attempts ? `${total.accuracy}%` : "—"}</strong><span>${total.correct} правильных ответов</span></div>
-        <div class="stat-small">Дней занятий<strong>${activeDays}</strong><span>на этом устройстве</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-row"><div><strong>Всего слов</strong><br><span>Во всех наборах</span></div><span class="accuracy">${total.words}</span></div>
-        <div class="stat-row"><div><strong>Дано ответов</strong><br><span>За всё время</span></div><span class="accuracy">${total.attempts}</span></div>
-        <div class="stat-row"><div><strong>Нужно повторить</strong><br><span>Слова с ошибками</span></div><span class="accuracy">${mistakeItems().length}</span></div>
-      </div>
+      <section class="page-head"><div><p class="eyebrow">Что уже закреплено</p><h1>Прогресс</h1></div></section>
+      <section class="learning-overview">
+        <div class="learning-top"><div><span>Закреплено</span><strong>${progress.learned} из ${progress.words}</strong></div><span class="learning-percent">${completed}%</span></div>
+        <div class="learning-track"><span style="width:${completed}%"></span></div>
+        <div class="learning-breakdown">
+          <div><strong>${progress.untouched}</strong><span>ещё не проходили</span></div>
+          <div class="${progress.needsRepeat ? "needs-attention" : ""}"><strong>${progress.needsRepeat}</strong><span>нужно повторить</span></div>
+        </div>
+        ${progress.needsRepeat ? `<button class="primary-btn full-width" type="button" data-action="start-mistakes">Повторить ошибки</button>` : ""}
+      </section>
       <div class="section-head"><h2>По наборам</h2></div>
       <div class="stat-card stat-list">${state.sets.length ? state.sets.map(set => {
-        const attempts = set.items.reduce((sum, item) => sum + item.attempts, 0);
-        const correct = set.items.reduce((sum, item) => sum + item.correct, 0);
-        return `<button class="stat-set-row" type="button" data-open-set="${set.id}"><span><strong>${esc(set.title)}</strong><small>${set.items.length} ${wordForm(set.items.length, ["слово", "слова", "слов"])}</small></span><span class="stat-set-end"><span class="accuracy">${attempts ? Math.round(correct / attempts * 100) + "%" : "—"}</span><span class="chevron">›</span></span></button>`;
+        const setProgress = learningStats(set.items);
+        const details = [`${setProgress.learned} закреплено`];
+        if (setProgress.untouched) details.push(`${setProgress.untouched} не проходили`);
+        return `<button class="stat-set-row" type="button" data-open-set="${set.id}"><span><strong>${esc(set.title)}</strong><small>${details.join(" · ")}</small></span><span class="stat-set-end">${setProgress.needsRepeat ? `<span class="repeat-pill">${setProgress.needsRepeat} повторить</span>` : `<span class="ready-mark">${setProgress.words && !setProgress.untouched ? "Готово" : ""}</span>`}<span class="chevron">›</span></span></button>`;
       }).join("") : `<p class="subtext">Создайте первый набор, чтобы здесь появилась статистика.</p>`}</div>
     `;
   }
@@ -497,9 +498,8 @@
   function renderResult() {
     setHeader(false);
     const totalWords = quiz.baseItems?.length || quiz.items.length;
-    const score = totalWords ? Math.round(quiz.correct / totalWords * 100) : 0;
-    const message = quiz.items.length > totalWords ? "Все сложные слова повторены до правильного ответа." : "Отлично — ни одной ошибки.";
-    app.innerHTML = `<section class="result-wrap"><div class="result-card"><div class="result-ring" style="--score:${score}%"><strong>${score}%</strong></div><p class="eyebrow">Тренировка завершена</p><h1>${quiz.correct} из ${totalWords}</h1><p>${message}</p><div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">Готово</button><button class="primary-btn" type="button" data-action="repeat-quiz">Ещё раз</button></div></div></section>`;
+    const message = quiz.items.length > totalWords ? "Все слова с ошибками встретились ещё раз и теперь отвечены правильно." : "Все слова отвечены правильно.";
+    app.innerHTML = `<section class="result-wrap"><div class="result-card"><div class="result-check" aria-hidden="true">✓</div><p class="eyebrow">Тренировка завершена</p><h1>Готово</h1><p>${message}</p><div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">К наборам</button><button class="primary-btn" type="button" data-action="repeat-quiz">Пройти ещё раз</button></div></div></section>`;
   }
 
   function showNewSet() {
@@ -581,7 +581,7 @@
     openSheet(`<div class="sheet-head"><h2>Данные приложения</h2><button class="close-btn" type="button" data-close-sheet>×</button></div>
       <p class="subtext">Слова и результаты хранятся только в этом браузере. Сохраните копию перед очисткой Safari или сменой телефона.</p>
       <div class="settings-list">
-        <button class="settings-btn" type="button" data-action="export"><span class="small-icon"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span><span><strong>Скачать резервную копию</strong><span>Все наборы и статистика в одном файле</span></span></button>
+        <button class="settings-btn" type="button" data-action="export"><span class="small-icon"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span><span><strong>Скачать резервную копию</strong><span>Все наборы и прогресс в одном файле</span></span></button>
         <button class="settings-btn" type="button" data-action="import"><span class="small-icon"><svg viewBox="0 0 24 24"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg></span><span><strong>Восстановить из файла</strong><span>Заменит текущие данные данными из копии</span></span></button>
         <button class="settings-btn danger" type="button" data-action="reset"><span class="small-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 14h8l1-14"/></svg></span><span><strong>Очистить всё</strong><span>Удалить наборы и результаты</span></span></button>
       </div>`);
@@ -807,6 +807,10 @@
     else if (action === "start-set") {
       const set = state.sets.find(entry => entry.id === view.setId);
       requestQuiz(set.items.map(item => ({ ...item, type: set.type, setId: set.id })), set.title);
+    } else if (action === "repeat-set-mistakes") {
+      const set = state.sets.find(entry => entry.id === view.setId);
+      const errors = set?.items.filter(item => item.mistakes > 0) || [];
+      requestQuiz(errors.map(item => ({ ...item, type: set.type, setId: set.id })), `${set.title} — ошибки`, "review");
     } else if (action === "start-mistakes") requestQuiz(mistakeItems(), "Повтор ошибок", "review");
     else if (action === "start-all") requestQuiz(allItems(), "Быстрый повтор", "review");
     else if (action === "check-text") checkAnswer(document.querySelector("#answerInput")?.value || "");

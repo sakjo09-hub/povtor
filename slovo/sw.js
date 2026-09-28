@@ -1,5 +1,5 @@
-const CACHE = "povtor-v12";
-const ASSETS = ["./", "./index.html", "./styles.css?v=12", "./app.js?v=12", "./manifest.webmanifest?v=12", "./favicon.svg"];
+const CACHE = "povtor-v13";
+const ASSETS = ["./", "./index.html", "./styles.css?v=13", "./app.js?v=13", "./manifest.webmanifest?v=13", "./favicon.svg"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
