@@ -482,7 +482,8 @@
     if (original) {
       original.attempts += 1;
       original.correct += isCorrect ? 1 : 0;
-      original.mistakes = isCorrect ? 0 : original.mistakes + 1;
+      if (!isCorrect) original.mistakes += 1;
+      else if (quiz.source === "review") original.mistakes = 0;
       original.lastAnsweredAt = new Date().toISOString();
     }
     const now = new Date();
