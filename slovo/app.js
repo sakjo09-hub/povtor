@@ -282,17 +282,19 @@
     const mistakes = mistakeItems();
     const availableSets = state.sets.map(set => {
       const errors = set.items.filter(item => item.mistakes > 0).length;
-      return { set, count: mistakes.length ? errors : set.items.length };
+      return { set, count: errors };
     }).filter(entry => entry.count);
-    const repeatCount = mistakes.length || allItems().length;
+    const hasWords = allItems().length > 0;
     app.innerHTML = `
       <section class="page-head"><div><p class="eyebrow">Работа над ошибками</p><h1>Повтор</h1></div></section>
-      ${repeatCount ? `
-        <section class="summary-card"><div class="summary-row"><div><div class="summary-title">${mistakes.length ? "Нужно закрепить" : "Быстрый повтор"}</div><div class="summary-value">${repeatCount} ${wordForm(repeatCount, ["слово", "слова", "слов"])}</div><div class="summary-note">${mistakes.length ? "Сначала покажем слова, где были ошибки" : "Можно освежить все слова в случайном порядке"}</div></div><div class="summary-badge">↻</div></div></section>
-        <button class="primary-btn full-width" type="button" data-action="${mistakes.length ? "start-mistakes" : "start-all"}">${mistakes.length ? "Повторить все ошибки" : "Повторить все слова"}</button>
-        <div class="section-head"><h2>${mistakes.length ? "Ошибки по наборам" : "Выберите набор"}</h2></div>
+      ${mistakes.length ? `
+        <section class="summary-card"><div class="summary-row"><div><div class="summary-title">Нужно закрепить</div><div class="summary-value">${mistakes.length} ${wordForm(mistakes.length, ["слово", "слова", "слов"])}</div><div class="summary-note">Здесь только слова, в которых были ошибки</div></div><div class="summary-badge">↻</div></div></section>
+        <button class="primary-btn full-width" type="button" data-action="start-mistakes">Повторить все ошибки</button>
+        <div class="section-head"><h2>Ошибки по наборам</h2></div>
         ${availableSets.map(({set, count}) => `<div class="review-card"><div class="review-count">${count}</div><div class="review-copy"><h3>${esc(set.title)}</h3><p>${typeInfo[set.type].title}</p></div><button class="small-primary" type="button" data-review-set="${set.id}">Повторить</button></div>`).join("")}
-      ` : `<section class="empty-state"><div class="empty-icon">＋</div><h2>Пока нечего повторять</h2><p>Создайте набор и добавьте в него несколько слов.</p><button class="primary-btn" type="button" data-route="home">Создать набор</button></section>`}
+      ` : hasWords
+        ? `<section class="empty-state review-complete"><div class="empty-icon is-success">✓</div><h2>Всё повторено</h2><p>Сейчас нет слов с ошибками. Новую тренировку можно начать в разделе «Наборы».</p><button class="primary-btn" type="button" data-route="home">К наборам</button></section>`
+        : `<section class="empty-state"><div class="empty-icon">＋</div><h2>Пока нечего повторять</h2><p>Сначала создайте набор и добавьте в него слова.</p><button class="primary-btn" type="button" data-route="home">Создать набор</button></section>`}
     `;
   }
 
@@ -860,7 +862,6 @@
       const errors = set?.items.filter(item => item.mistakes > 0) || [];
       requestQuiz(errors.map(item => ({ ...item, type: set.type, setId: set.id })), `${set.title} — ошибки`, "review");
     } else if (action === "start-mistakes") requestQuiz(mistakeItems(), "Повтор ошибок", "review");
-    else if (action === "start-all") requestQuiz(allItems(), "Быстрый повтор", "review");
     else if (action === "check-text") checkAnswer(document.querySelector("#answerInput")?.value || "");
     else if (action === "next-question") {
       if (quiz.index + 1 >= quiz.items.length) navigate("result", view.setId);
@@ -886,8 +887,7 @@
     if (reviewSetId) {
       const set = state.sets.find(entry => entry.id === reviewSetId);
       const errors = set.items.filter(item => item.mistakes > 0);
-      const selectedItems = errors.length ? errors : set.items;
-      requestQuiz(selectedItems.map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
+      requestQuiz(errors.map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
     }
   });
 
