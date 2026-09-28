@@ -324,7 +324,19 @@
   function startQuiz(items, title, source = "set") {
     if (!items.length) return toast("В этом наборе пока нет слов");
     const baseItems = items.map(item => ({ ...item }));
-    quiz = { title, source, baseItems, items: shuffle(baseItems.map(item => ({ ...item }))), index: 0, correct: 0, answered: false, chosenStress: null };
+    quiz = {
+      title,
+      source,
+      baseItems,
+      items: shuffle(baseItems.map(item => ({ ...item }))),
+      index: 0,
+      correct: 0,
+      wrongAttempts: 0,
+      wrongItemIds: [],
+      wrongCounts: {},
+      answered: false,
+      chosenStress: null
+    };
     view = { route: "quiz", setId: view.setId };
     render();
   }
@@ -456,7 +468,12 @@
 
     quiz.answered = true;
     if (isCorrect) quiz.correct += 1;
-    else quiz.items.push({ ...item });
+    else {
+      quiz.items.push({ ...item });
+      quiz.wrongAttempts = (quiz.wrongAttempts || 0) + 1;
+      if (!quiz.wrongItemIds.includes(item.id)) quiz.wrongItemIds.push(item.id);
+      quiz.wrongCounts[item.id] = (quiz.wrongCounts[item.id] || 0) + 1;
+    }
     const totalWords = quiz.baseItems?.length || quiz.items.length;
     document.querySelector(".progress-fill").style.width = `${Math.round(quiz.correct / totalWords * 100)}%`;
     document.querySelector(".progress-count").textContent = `${quiz.correct} / ${totalWords}`;
@@ -498,8 +515,45 @@
   function renderResult() {
     setHeader(false);
     const totalWords = quiz.baseItems?.length || quiz.items.length;
-    const message = quiz.items.length > totalWords ? "Все слова с ошибками встретились ещё раз и теперь отвечены правильно." : "Все слова отвечены правильно.";
-    app.innerHTML = `<section class="result-wrap"><div class="result-card"><div class="result-check" aria-hidden="true">✓</div><p class="eyebrow">Тренировка завершена</p><h1>Готово</h1><p>${message}</p><div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">К наборам</button><button class="primary-btn" type="button" data-action="repeat-quiz">Пройти ещё раз</button></div></div></section>`;
+    const wrongWords = quiz.wrongItemIds?.length || 0;
+    const correctFirstTry = Math.max(0, totalWords - wrongWords);
+    const wrongAttempts = quiz.wrongAttempts || 0;
+    const wrongPercent = totalWords ? Math.round(wrongWords / totalWords * 100) : 0;
+    const message = wrongWords ? "Слова с ошибками уже повторены до правильного ответа." : "Отлично — ни одной ошибки.";
+    app.innerHTML = `<section class="result-wrap"><div class="result-card">
+      <div class="result-check" aria-hidden="true">✓</div>
+      <p class="eyebrow">Тренировка завершена</p><h1>Готово</h1><p>${message}</p>
+      <div class="result-stats" aria-label="Статистика тренировки">
+        <div class="result-stat is-correct"><strong>${correctFirstTry}</strong><span>Правильно<small>с первого раза</small></span></div>
+        <div class="result-stat is-wrong"><strong>${wrongWords}</strong><span>Неправильно<small>слов</small></span></div>
+        <div class="result-stat"><strong>${wrongAttempts}</strong><span>Ошибок<small>всего</small></span></div>
+        <div class="result-stat"><strong>${wrongPercent}%</strong><span>Неправильных<small>от всех слов</small></span></div>
+      </div>
+      ${wrongWords ? `<button class="result-errors-btn full-width" type="button" data-action="show-quiz-errors">Посмотреть ошибки</button>` : ""}
+      <div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">К наборам</button><button class="primary-btn" type="button" data-action="repeat-quiz">Пройти ещё раз</button></div>
+    </div></section>`;
+  }
+
+  function showQuizErrors() {
+    const ids = new Set(quiz?.wrongItemIds || []);
+    const items = (quiz?.baseItems || []).filter(item => ids.has(item.id));
+    if (!items.length) return toast("В этой тренировке не было ошибок");
+    const rows = items.map((item, index) => {
+      const type = item.type || findSetForItem(item.id)?.type;
+      let prompt = item.prompt || item.plain || item.word || "";
+      if (type === "letters") prompt = letterData(item).masked;
+      else if (type === "double") prompt = doubleData(item).masked;
+      const count = quiz.wrongCounts?.[item.id] || 1;
+      return `<div class="session-error-row">
+        <span class="session-error-number">${index + 1}</span>
+        <span class="session-error-copy"><strong>${esc(prompt)}</strong><span>Правильно: ${esc(displayCorrectAnswer(item, type))}</span></span>
+        <span class="session-error-count">${count} ${wordForm(count, ["ошибка", "ошибки", "ошибок"])}</span>
+      </div>`;
+    }).join("");
+    openSheet(`<div class="sheet-head"><div><p class="eyebrow">Последняя тренировка</p><h2>Ошибки</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>
+      <p class="subtext quiz-errors-copy">Эти слова уже повторены до правильного ответа.</p>
+      <div class="session-error-list">${rows}</div>
+      <button class="primary-btn full-width" type="button" data-close-sheet>Закрыть</button>`);
   }
 
   function showNewSet() {
@@ -819,6 +873,7 @@
       else { quiz.index += 1; quiz.answered = false; quiz.chosenStress = null; render(); }
     } else if (action === "finish-quiz") navigate(quiz.source === "review" ? "review" : "home");
     else if (action === "repeat-quiz") startQuiz(quiz.baseItems || quiz.items, quiz.title, quiz.source);
+    else if (action === "show-quiz-errors") showQuizErrors();
 
     const choice = event.target.closest("[data-choice]")?.dataset.choice;
     if (choice) checkAnswer(choice);
