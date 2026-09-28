@@ -621,24 +621,24 @@
       if (set.type === "stress") draftStressIndex = marked.find(index => VOWELS.includes(chars[index]?.toLocaleLowerCase("ru-RU"))) ?? null;
     }
     const title = existing ? "Изменить слово" : fromBulk ? `Слово ${bulkSession.index + 1} из ${bulkSession.entries.length}` : "Добавить слово";
-    const commonHead = `<div class="sheet-head"><div><p class="eyebrow">${typeInfo[set.type].title}</p><h2>${title}</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>`;
+    const commonHead = `<div class="sheet-head add-sheet-head"><div><h2>${title}</h2><p class="add-context">${typeInfo[set.type].title}</p></div><button class="close-btn" type="button" data-close-sheet>×</button></div>${!existing && !fromBulk ? entrySwitcher("single") : ""}`;
     const submitLabel = existing ? "Сохранить" : fromBulk ? "Готово, дальше" : "Добавить слово";
     const footer = existing ? "" : fromBulk ? bulkStepFooter() : addedFooter();
     if (set.type === "letters") {
       openSheet(`${commonHead}<form id="addLettersForm">
-        <div class="field"><label for="letterWord">Слово целиком</label><input id="letterWord" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, багаж" required /><p class="field-hint">Нажмите на одну или несколько букв, которые нужно пропустить.</p></div>
-        <div class="field"><span class="field-label">Нажмите на буквы, которые нужно спрятать</span><div class="letter-picker empty-picker" id="letterPicker">Сначала введите слово</div></div>
-        <div class="add-preview" id="addPreview"><span>В задании будет:</span><strong>—</strong></div>
-        <button class="primary-btn full-width" id="addWordButton" type="submit" disabled>${submitLabel}</button>
+        <div class="field add-main-field"><label for="letterWord">Введите слово</label><input id="letterWord" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, багаж" required /></div>
+        <div class="add-step" id="letterDetails" ${initialWord ? "" : "hidden"}><div class="step-title">Какие буквы пропустить?</div><p class="step-hint">Нажмите на одну или несколько букв</p><div class="letter-picker" id="letterPicker"></div></div>
+        <div class="add-preview" id="addPreview" hidden><span>Получится</span><strong>—</strong></div>
+        <button class="primary-btn full-width" id="addWordButton" type="submit" hidden disabled>${submitLabel}</button>
       </form>${footer}`);
       renderLetterPicker(initialWord);
       setTimeout(() => document.querySelector("#letterWord")?.focus(), 100);
     } else if (set.type === "double") {
       openSheet(`${commonHead}<form id="addDoubleForm">
-        <div class="field"><label for="doubleWord">Слово целиком</label><input id="doubleWord" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, деревянный" required /><p class="field-hint">Нажмите на букву — если она двойная, выделятся сразу обе.</p></div>
-        <div class="field"><span class="field-label">Какую букву проверять?</span><div class="letter-picker empty-picker" id="doublePicker">Сначала введите слово</div></div>
-        <div class="add-preview" id="doublePreview"><span>В задании будет:</span><strong>—</strong></div>
-        <button class="primary-btn full-width" id="addDoubleButton" type="submit" disabled>${submitLabel}</button>
+        <div class="field add-main-field"><label for="doubleWord">Введите слово</label><input id="doubleWord" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, деревянный" required /></div>
+        <div class="add-step" id="doubleDetails" ${initialWord ? "" : "hidden"}><div class="step-title">Какую букву проверять?</div><p class="step-hint">Нажмите на неё — двойная выделится целиком</p><div class="letter-picker" id="doublePicker"></div></div>
+        <div class="add-preview" id="doublePreview" hidden><span>Получится</span><strong>—</strong></div>
+        <button class="primary-btn full-width" id="addDoubleButton" type="submit" hidden disabled>${submitLabel}</button>
       </form>${footer}`);
       renderDoublePicker(initialWord);
       setTimeout(() => document.querySelector("#doubleWord")?.focus(), 100);
@@ -646,22 +646,22 @@
       const spelling = spellingParts(existing, bulkRaw);
       openSheet(`${commonHead}<form id="addSpellingForm">
         ${fromBulk && !spelling.first ? `<div class="field"><span class="field-label">Нажмите между частями слова</span><div class="boundary-picker">${boundaryButtons(bulkRaw)}</div></div>` : ""}
-        <div class="split-fields"><div class="field"><label for="spellingPart1">Первая часть</label><input id="spellingPart1" name="part1" value="${esc(spelling.first)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="в" required /></div><div class="join-mark">+</div><div class="field"><label for="spellingPart2">Вторая часть</label><input id="spellingPart2" name="part2" value="${esc(spelling.second)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="общем" required /></div></div>
-        <div class="field"><span class="field-label">Как пишется правильно?</span><div class="segmented-control">
+        <div class="field add-main-field"><span class="field-label">Введите две части</span><div class="split-fields"><input id="spellingPart1" name="part1" value="${esc(spelling.first)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="в" aria-label="Первая часть" required /><div class="join-mark">+</div><input id="spellingPart2" name="part2" value="${esc(spelling.second)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="общем" aria-label="Вторая часть" required /></div></div>
+        <div class="field spelling-choice"><span class="field-label">Как пишется?</span><div class="segmented-control">
           <label><input type="radio" name="answer" value="together" ${spelling.answer === "together" ? "checked" : ""}><span>Слитно</span></label>
           <label><input type="radio" name="answer" value="separate" ${spelling.answer === "separate" ? "checked" : ""}><span>Раздельно</span></label>
           <label><input type="radio" name="answer" value="hyphen" ${spelling.answer === "hyphen" ? "checked" : ""}><span>Через дефис</span></label>
         </div></div>
-        <div class="add-preview" id="spellingPreview"><span>Правильный ответ:</span><strong>—</strong></div>
-        <button class="primary-btn full-width" type="submit">${submitLabel}</button>
+        <div class="add-preview" id="spellingPreview" hidden><span>Правильный ответ</span><strong>—</strong></div>
+        <button class="primary-btn full-width" id="addSpellingButton" type="submit" hidden>${submitLabel}</button>
       </form>${footer}`);
       updateSpellingPreview();
       setTimeout(() => document.querySelector("#spellingPart1")?.focus(), 100);
     } else {
       openSheet(`${commonHead}<form id="addStressForm">
-        <div class="field"><label for="stressWordInput">Слово</label><input id="stressWordInput" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, звонит" required /><p class="field-hint">Напишите слово обычно, затем нажмите на ударную гласную.</p></div>
-        <div class="field"><span class="field-label">Куда падает ударение?</span><div class="letter-picker empty-picker" id="stressPicker">Сначала введите слово</div></div>
-        <button class="primary-btn full-width" id="addStressButton" type="submit" disabled>${submitLabel}</button>
+        <div class="field add-main-field"><label for="stressWordInput">Введите слово</label><input id="stressWordInput" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, звонит" required /></div>
+        <div class="add-step" id="stressDetails" ${initialWord ? "" : "hidden"}><div class="step-title">Куда падает ударение?</div><p class="step-hint">Нажмите на ударную гласную</p><div class="letter-picker" id="stressPicker"></div></div>
+        <button class="primary-btn full-width" id="addStressButton" type="submit" hidden disabled>${submitLabel}</button>
       </form>${footer}`);
       renderStressPicker(initialWord);
       setTimeout(() => document.querySelector("#stressWordInput")?.focus(), 100);
@@ -669,7 +669,11 @@
   }
 
   function addedFooter() {
-    return `<button class="bulk-open-btn full-width" type="button" data-action="bulk-add">Вставить сразу список слов</button><div class="added-footer"><span id="addedCount">Можно добавить несколько слов подряд</span><button class="text-btn" type="button" data-close-sheet>Готово</button></div>`;
+    return `<div class="added-footer" id="addedFooter" hidden><span id="addedCount"></span><button class="text-btn" type="button" data-close-sheet>Готово</button></div>`;
+  }
+
+  function entrySwitcher(active) {
+    return `<div class="entry-switch" aria-label="Способ добавления"><button class="${active === "single" ? "is-active" : ""}" type="button" data-action="single-add" ${active === "single" ? "disabled" : ""}>Одно слово</button><button class="${active === "bulk" ? "is-active" : ""}" type="button" data-action="bulk-add" ${active === "bulk" ? "disabled" : ""}>Списком</button></div>`;
   }
 
   function bulkStepFooter() {
@@ -699,8 +703,9 @@
     editingItemId = null;
     const separators = set.type === "spelling" ? "Переносите выражения на новую строку или разделяйте запятыми." : "Можно разделять пробелами, запятыми или переносами строк.";
     const hint = set.type === "letters" ? "Заглавными отметьте пропуски: привИлегия." : set.type === "double" ? "Заглавными отметьте проверяемые буквы: деревяННый." : set.type === "stress" ? "Заглавной отметьте ударение: звонИт." : "Пробел и дефис распознаются автоматически; в слитном слове затем выберите границу.";
-    openSheet(`<div class="sheet-head"><div><p class="eyebrow">Быстрое добавление</p><h2>Вставить список</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>
-      <form id="bulkInputForm"><div class="field"><label for="bulkInput">Слова или выражения</label><textarea id="bulkInput" name="words" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Вставьте сюда список" required></textarea><p class="field-hint">${separators} ${hint} Нумерацию и повторы приложение уберёт само.</p></div><div class="bulk-found" id="bulkFound">Пока ничего не найдено</div><button class="primary-btn full-width" type="submit">Разобрать список</button></form>`);
+    const placeholder = set.type === "spelling" ? "в общем, по-прежнему, наконец" : "Слова через пробел, запятую или с новой строки";
+    openSheet(`<div class="sheet-head add-sheet-head"><div><h2>Добавить слова</h2><p class="add-context">${typeInfo[set.type].title}</p></div><button class="close-btn" type="button" data-close-sheet>×</button></div>${entrySwitcher("bulk")}
+      <form id="bulkInputForm"><div class="field add-main-field"><label for="bulkInput">Вставьте список</label><textarea id="bulkInput" name="words" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${placeholder}" required></textarea><p class="field-hint">${separators} ${hint}</p></div><div class="bulk-found" id="bulkFound" hidden></div><button class="primary-btn full-width" type="submit">Продолжить</button></form>`);
     setTimeout(() => document.querySelector("#bulkInput")?.focus(), 100);
   }
 
@@ -816,13 +821,15 @@
     const markup = pickerWords(word, (char, index) => /[а-яё]/i.test(char)
       ? `<button class="picker-letter ${draftHidden.includes(index) ? "is-selected" : ""}" type="button" data-hide-index="${index}">${esc(char)}</button>`
       : `<span class="picker-letter is-disabled">${esc(char)}</span>`);
-    picker.classList.toggle("empty-picker", !markup);
-    picker.innerHTML = markup || "Сначала введите слово";
+    picker.innerHTML = markup;
+    const details = document.querySelector("#letterDetails");
+    if (details) details.hidden = !word.trim();
     const masked = chars.map((char, index) => draftHidden.includes(index) ? "_" : char).join("");
     const preview = document.querySelector("#addPreview strong");
     if (preview) preview.textContent = masked || "—";
+    document.querySelector("#addPreview")?.toggleAttribute("hidden", !word.trim() || !draftHidden.length);
     const submit = document.querySelector("#addWordButton");
-    if (submit) submit.disabled = !word.trim() || !draftHidden.length;
+    if (submit) { submit.hidden = !word.trim() || !draftHidden.length; submit.disabled = !draftHidden.length; }
   }
 
   function renderDoublePicker(word) {
@@ -834,12 +841,14 @@
     const markup = pickerWords(word, (char, index) => /[а-яё]/i.test(char)
       ? `<button class="picker-letter ${selected && index >= selected.start && index < selected.start + selected.count ? "is-selected" : ""}" type="button" data-double-index="${index}">${esc(char)}</button>`
       : `<span class="picker-letter is-disabled">${esc(char)}</span>`);
-    picker.classList.toggle("empty-picker", !markup);
-    picker.innerHTML = markup || "Сначала введите слово";
+    picker.innerHTML = markup;
+    const details = document.querySelector("#doubleDetails");
+    if (details) details.hidden = !word.trim();
     const preview = document.querySelector("#doublePreview strong");
     if (preview) preview.textContent = selected ? doubleData({ word, letter: selected.letter, start: selected.start, count: selected.count }).masked : "—";
+    document.querySelector("#doublePreview")?.toggleAttribute("hidden", !selected);
     const submit = document.querySelector("#addDoubleButton");
-    if (submit) submit.disabled = !word.trim() || !selected || selected.count > 2;
+    if (submit) { submit.hidden = !word.trim() || !selected; submit.disabled = !selected || selected.count > 2; }
   }
 
   function renderStressPicker(word) {
@@ -850,10 +859,11 @@
     const markup = pickerWords(word, (char, index) => VOWELS.includes(char.toLocaleLowerCase("ru-RU"))
       ? `<button class="picker-letter ${draftStressIndex === index ? "is-selected stress-selected" : ""}" type="button" data-draft-stress="${index}">${esc(char)}</button>`
       : `<span class="picker-letter is-disabled">${esc(char)}</span>`);
-    picker.classList.toggle("empty-picker", !markup);
-    picker.innerHTML = markup || "Сначала введите слово";
+    picker.innerHTML = markup;
+    const details = document.querySelector("#stressDetails");
+    if (details) details.hidden = !word.trim();
     const submit = document.querySelector("#addStressButton");
-    if (submit) submit.disabled = !word.trim() || draftStressIndex === null;
+    if (submit) { submit.hidden = !word.trim() || draftStressIndex === null; submit.disabled = draftStressIndex === null; }
   }
 
   function updateSpellingPreview() {
@@ -862,12 +872,16 @@
     const answer = document.querySelector("input[name='answer']:checked")?.value || "together";
     const preview = document.querySelector("#spellingPreview strong");
     if (preview) preview.textContent = first && second ? spellingResult(`${first}/${second}`, answer) : "—";
+    document.querySelector("#spellingPreview")?.toggleAttribute("hidden", !first || !second);
+    const submit = document.querySelector("#addSpellingButton");
+    if (submit) submit.hidden = !first || !second;
   }
 
   function noteAdded() {
     addedInSheet += 1;
     const counter = document.querySelector("#addedCount");
     if (counter) counter.textContent = `Добавлено: ${addedInSheet}`;
+    document.querySelector("#addedFooter")?.removeAttribute("hidden");
     toast("Слово добавлено");
   }
 
@@ -1117,7 +1131,8 @@
     const quizFilter = event.target.closest("[data-quiz-filter]")?.dataset.quizFilter;
     if (quizFilter) return launchPendingQuiz(null, quizFilter);
     const action = event.target.closest("[data-action]")?.dataset.action;
-    if (action === "bulk-add") showBulkAdd();
+    if (action === "single-add") { bulkSession = null; showAddWords(); }
+    else if (action === "bulk-add") showBulkAdd();
     else if (action === "bulk-back" && bulkSession?.index) { bulkSession.index -= 1; showBulkStep(); }
     else if (action === "bulk-skip" && bulkSession) { bulkSession.prepared[bulkSession.index] = null; bulkSession.index += 1; showBulkStep(); }
     else if (action === "export") exportData();
@@ -1139,7 +1154,10 @@
       const set = state.sets.find(entry => entry.id === view.setId);
       const count = parseBulkEntries(event.target.value, set?.type).length;
       const output = document.querySelector("#bulkFound");
-      if (output) output.textContent = count ? `Найдено: ${count} ${wordForm(count, ["позиция", "позиции", "позиций"])}` : "Пока ничего не найдено";
+      if (output) {
+        output.hidden = !count;
+        output.textContent = count ? `Найдено: ${count} ${wordForm(count, ["позиция", "позиции", "позиций"])}` : "";
+      }
     }
   });
 
