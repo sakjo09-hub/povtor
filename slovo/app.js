@@ -139,6 +139,7 @@
     backButton.classList.toggle("is-hidden", !detail);
     brand.classList.toggle("is-hidden", detail);
     bottomNav.classList.toggle("is-hidden", detail);
+    bottomNav.querySelectorAll("button").forEach(button => { button.disabled = false; });
     settingsButton.classList.toggle("is-hidden", detail && view.route === "quiz");
   }
 
@@ -301,7 +302,8 @@
     if (!quiz || !quiz.items[quiz.index]) return navigate("home");
     const item = quiz.items[quiz.index];
     const type = item.type || state.sets.find(set => set.id === item.setId)?.type || state.sets.find(set => set.items.some(entry => entry.id === item.id))?.type;
-    const progress = Math.round((quiz.index + (quiz.answered ? 1 : 0)) / quiz.items.length * 100);
+    const totalWords = quiz.baseItems?.length || quiz.items.length;
+    const progress = Math.round(quiz.correct / totalWords * 100);
     let answerUI = "";
     if (type === "letters") {
       const data = letterData(item);
@@ -318,7 +320,7 @@
     }
     app.innerHTML = `
       <section class="quiz-page">
-        <div class="quiz-head"><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><span class="progress-count">${quiz.index + 1} / ${quiz.items.length}</span></div>
+        <div class="quiz-head"><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><span class="progress-count">${quiz.correct} / ${totalWords}</span></div>
         <div class="quiz-card">
           <div class="quiz-kind">${typeInfo[type].short}</div>
           ${answerUI}
@@ -403,6 +405,9 @@
     quiz.answered = true;
     if (isCorrect) quiz.correct += 1;
     else quiz.items.push({ ...item });
+    const totalWords = quiz.baseItems?.length || quiz.items.length;
+    document.querySelector(".progress-fill").style.width = `${Math.round(quiz.correct / totalWords * 100)}%`;
+    document.querySelector(".progress-count").textContent = `${quiz.correct} / ${totalWords}`;
     if (original) {
       original.attempts += 1;
       original.correct += isCorrect ? 1 : 0;
@@ -413,9 +418,7 @@
     state.activityDates = [...new Set([...(state.activityDates || []), today])];
     saveState();
 
-    document.querySelectorAll("button, input").forEach(control => {
-      if (!control.closest(".topbar")) control.disabled = true;
-    });
+    document.querySelectorAll("#app button, #app input").forEach(control => { control.disabled = true; });
     if (type === "stress") document.querySelector(`[data-stress-index="${userAnswer}"]`)?.classList.add("is-chosen");
     const answer = displayCorrectAnswer(item, type);
     const area = document.querySelector("#feedbackArea");
@@ -440,10 +443,11 @@
   }
 
   function renderResult() {
-    setHeader(true);
-    const score = quiz.items.length ? Math.round(quiz.correct / quiz.items.length * 100) : 0;
-    const message = score === 100 ? "Отлично — ни одной ошибки." : "Все сложные слова повторены до правильного ответа.";
-    app.innerHTML = `<section class="result-wrap"><div class="result-card"><div class="result-ring" style="--score:${score}%"><strong>${score}%</strong></div><p class="eyebrow">Тренировка завершена</p><h1>${quiz.correct} из ${quiz.items.length}</h1><p>${message}</p><div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">Готово</button><button class="primary-btn" type="button" data-action="repeat-quiz">Ещё раз</button></div></div></section>`;
+    setHeader(false);
+    const totalWords = quiz.baseItems?.length || quiz.items.length;
+    const score = totalWords ? Math.round(quiz.correct / totalWords * 100) : 0;
+    const message = quiz.items.length > totalWords ? "Все сложные слова повторены до правильного ответа." : "Отлично — ни одной ошибки.";
+    app.innerHTML = `<section class="result-wrap"><div class="result-card"><div class="result-ring" style="--score:${score}%"><strong>${score}%</strong></div><p class="eyebrow">Тренировка завершена</p><h1>${quiz.correct} из ${totalWords}</h1><p>${message}</p><div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">Готово</button><button class="primary-btn" type="button" data-action="repeat-quiz">Ещё раз</button></div></div></section>`;
   }
 
   function showNewSet() {
@@ -740,7 +744,7 @@
     else if (action === "next-question") {
       if (quiz.index + 1 >= quiz.items.length) navigate("result", view.setId);
       else { quiz.index += 1; quiz.answered = false; quiz.chosenStress = null; render(); }
-    } else if (action === "finish-quiz") navigate(quiz.source === "review" ? "review" : "set", quiz.source === "review" ? null : view.setId);
+    } else if (action === "finish-quiz") navigate(quiz.source === "review" ? "review" : "home");
     else if (action === "repeat-quiz") startQuiz(quiz.baseItems || quiz.items, quiz.title, quiz.source);
 
     const choice = event.target.closest("[data-choice]")?.dataset.choice;
