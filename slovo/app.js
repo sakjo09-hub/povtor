@@ -3,6 +3,11 @@
 
   const STORAGE_KEY = "slovo-app-v1";
   const VOWELS = "аеёиоуыэюя";
+  const LETTER_ALTERNATIVES = {
+    а: "о", о: "а", е: "и", и: "е", ё: "е", ы: "и", э: "е", я: "е", у: "ю", ю: "у",
+    б: "п", п: "б", в: "ф", ф: "в", г: "к", к: "г", д: "т", т: "д", ж: "ш", ш: "ж",
+    з: "с", с: "з", й: "и", л: "р", р: "л", м: "н", н: "м", х: "г", ц: "с", ч: "щ", щ: "ч"
+  };
   const app = document.querySelector("#app");
   const modalLayer = document.querySelector("#modalLayer");
   const backButton = document.querySelector("#backButton");
@@ -378,7 +383,8 @@
     const vowelPool = [...VOWELS];
     const consonantPool = [..."бвгджзйклмнпрстфхцчшщ"];
     const pool = VOWELS.includes(lower) ? vowelPool : consonantPool;
-    const options = shuffle([lower, ...shuffle(pool.filter(letter => letter !== lower)).slice(0, 3)]);
+    const alternative = LETTER_ALTERNATIVES[lower] || pool.find(letter => letter !== lower);
+    const options = shuffle([lower, alternative]);
     return options.map(letter => isUpper ? letter.toLocaleUpperCase("ru-RU") : letter);
   }
 

@@ -257,7 +257,7 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .choice-btn { min-height: 60px; border: 1px solid #ced8e7; border-radius: 18px; background: #f9fbfe; font-size: 17px; font-weight: 720; cursor: pointer; }
 .choice-btn:active { transform: scale(.98); background: var(--blue-soft); border-color: #95afe7; }
 .letter-instruction { margin: -14px 0 18px; }
-.letter-choice-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.letter-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(92px, 150px)); justify-content: center; gap: 12px; }
 .letter-choice-btn { min-height: 66px; border: 1px solid #ced8e7; border-radius: 18px; color: var(--ink); background: #f9fbfe; font-family: Georgia, serif; font-size: 27px; font-weight: 700; cursor: pointer; }
 .letter-choice-btn:active { transform: scale(.96); border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
 .double-choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 360px; margin: 0 auto; }
