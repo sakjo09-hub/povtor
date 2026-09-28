@@ -290,7 +290,8 @@
 
   function startQuiz(items, title, source = "set") {
     if (!items.length) return toast("В этом наборе пока нет слов");
-    quiz = { title, source, items: shuffle(items.map(item => ({ ...item }))), index: 0, correct: 0, answered: false, chosenStress: null };
+    const baseItems = items.map(item => ({ ...item }));
+    quiz = { title, source, baseItems, items: shuffle(baseItems.map(item => ({ ...item }))), index: 0, correct: 0, answered: false, chosenStress: null };
     view = { route: "quiz", setId: view.setId };
     render();
   }
@@ -401,6 +402,7 @@
 
     quiz.answered = true;
     if (isCorrect) quiz.correct += 1;
+    else quiz.items.push({ ...item });
     if (original) {
       original.attempts += 1;
       original.correct += isCorrect ? 1 : 0;
@@ -417,7 +419,7 @@
     if (type === "stress") document.querySelector(`[data-stress-index="${userAnswer}"]`)?.classList.add("is-chosen");
     const answer = displayCorrectAnswer(item, type);
     const area = document.querySelector("#feedbackArea");
-    area.innerHTML = `<div class="feedback ${isCorrect ? "correct" : "wrong"}"><div class="feedback-title">${isCorrect ? "Верно" : "Пока неверно"}</div><div class="feedback-answer">Правильный ответ: <strong>${esc(answer)}</strong></div></div>`;
+    area.innerHTML = `<div class="feedback ${isCorrect ? "correct" : "wrong"}"><div class="feedback-title">${isCorrect ? "Верно" : "Пока неверно"}</div><div class="feedback-answer">Правильный ответ: <strong>${esc(answer)}</strong></div>${isCorrect ? "" : `<div class="feedback-repeat">Это слово ещё раз появится в конце.</div>`}</div>`;
     document.querySelector(".quiz-footer").innerHTML = `<button class="primary-btn full-width" type="button" data-action="next-question">${quiz.index + 1 === quiz.items.length ? "Посмотреть результат" : "Дальше"}</button>`;
     document.querySelector("[data-action='next-question']").disabled = false;
   }
@@ -440,7 +442,7 @@
   function renderResult() {
     setHeader(true);
     const score = quiz.items.length ? Math.round(quiz.correct / quiz.items.length * 100) : 0;
-    const message = score === 100 ? "Отлично — ни одной ошибки." : score >= 70 ? "Хороший результат. Ошибки уже добавлены в повтор." : "Эти слова стоит пройти ещё раз.";
+    const message = score === 100 ? "Отлично — ни одной ошибки." : "Все сложные слова повторены до правильного ответа.";
     app.innerHTML = `<section class="result-wrap"><div class="result-card"><div class="result-ring" style="--score:${score}%"><strong>${score}%</strong></div><p class="eyebrow">Тренировка завершена</p><h1>${quiz.correct} из ${quiz.items.length}</h1><p>${message}</p><div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">Готово</button><button class="primary-btn" type="button" data-action="repeat-quiz">Ещё раз</button></div></div></section>`;
   }
 
@@ -739,7 +741,7 @@
       if (quiz.index + 1 >= quiz.items.length) navigate("result", view.setId);
       else { quiz.index += 1; quiz.answered = false; quiz.chosenStress = null; render(); }
     } else if (action === "finish-quiz") navigate(quiz.source === "review" ? "review" : "set", quiz.source === "review" ? null : view.setId);
-    else if (action === "repeat-quiz") startQuiz(quiz.items, quiz.title, quiz.source);
+    else if (action === "repeat-quiz") startQuiz(quiz.baseItems || quiz.items, quiz.title, quiz.source);
 
     const choice = event.target.closest("[data-choice]")?.dataset.choice;
     if (choice) checkAnswer(choice);
