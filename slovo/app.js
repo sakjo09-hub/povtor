@@ -23,6 +23,7 @@
   let draftStressIndex = null;
   let draftDoubleIndex = null;
   let addedInSheet = 0;
+  let pendingQuiz = null;
 
   function uid() {
     return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -297,6 +298,26 @@
     render();
   }
 
+  function requestQuiz(items, title, source = "set") {
+    if (!items.length) return toast("В этом наборе пока нет слов");
+    if (items.length <= 20) return startQuiz(items, title, source);
+    pendingQuiz = { items, title, source };
+    openSheet(`<div class="sheet-head"><div><p class="eyebrow">Выберите объём</p><h2>Начать тренировку</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>
+      <p class="subtext quiz-size-copy">В наборе ${items.length} ${wordForm(items.length, ["слово", "слова", "слов"])}. Можно пройти короткую случайную подборку или весь набор.</p>
+      <div class="quiz-size-list">
+        <button class="quiz-size-option is-primary" type="button" data-action="start-random-20"><span class="quiz-size-badge">20</span><span><strong>20 случайных слов</strong><small>Новая подборка при каждом запуске</small></span></button>
+        <button class="quiz-size-option" type="button" data-action="start-all-words"><span class="quiz-size-badge">${items.length}</span><span><strong>Все слова</strong><small>Пройти набор целиком</small></span></button>
+      </div>`);
+  }
+
+  function launchPendingQuiz(limit = null) {
+    if (!pendingQuiz) return;
+    const { items, title, source } = pendingQuiz;
+    const selected = limit ? shuffle(items.map(item => ({ ...item }))).slice(0, limit) : items;
+    closeSheet();
+    startQuiz(selected, title, source);
+  }
+
   function renderQuiz() {
     setHeader(true);
     if (!quiz || !quiz.items[quiz.index]) return navigate("home");
@@ -546,6 +567,20 @@
     modalLayer.classList.remove("is-open");
     modalLayer.setAttribute("aria-hidden", "true");
     modalLayer.innerHTML = "";
+    pendingQuiz = null;
+  }
+
+  function pickerWords(word, renderCharacter) {
+    const groups = [];
+    let current = [];
+    [...word].forEach((char, index) => {
+      if (/\s/.test(char)) {
+        if (current.length) groups.push(current);
+        current = [];
+      } else current.push({ char, index });
+    });
+    if (current.length) groups.push(current);
+    return groups.map(group => `<span class="picker-word">${group.map(({ char, index }) => renderCharacter(char, index)).join("")}</span>`).join("");
   }
 
   function renderLetterPicker(word) {
@@ -553,10 +588,11 @@
     if (!picker) return;
     const chars = [...word];
     draftHidden = draftHidden.filter(index => index < chars.length && /[а-яё]/i.test(chars[index]));
-    picker.classList.toggle("empty-picker", !chars.length);
-    picker.innerHTML = chars.length ? chars.map((char, index) => /[а-яё]/i.test(char)
+    const markup = pickerWords(word, (char, index) => /[а-яё]/i.test(char)
       ? `<button class="picker-letter ${draftHidden.includes(index) ? "is-selected" : ""}" type="button" data-hide-index="${index}">${esc(char)}</button>`
-      : `<span class="picker-letter is-disabled">${esc(char)}</span>`).join("") : "Сначала введите слово";
+      : `<span class="picker-letter is-disabled">${esc(char)}</span>`);
+    picker.classList.toggle("empty-picker", !markup);
+    picker.innerHTML = markup || "Сначала введите слово";
     const masked = chars.map((char, index) => draftHidden.includes(index) ? "_" : char).join("");
     const preview = document.querySelector("#addPreview strong");
     if (preview) preview.textContent = masked || "—";
@@ -570,10 +606,11 @@
     const chars = [...word];
     if (draftDoubleIndex !== null && (!chars[draftDoubleIndex] || !/[а-яё]/i.test(chars[draftDoubleIndex]))) draftDoubleIndex = null;
     const selected = draftDoubleIndex === null ? null : doubleRun(word, draftDoubleIndex);
-    picker.classList.toggle("empty-picker", !chars.length);
-    picker.innerHTML = chars.length ? chars.map((char, index) => /[а-яё]/i.test(char)
+    const markup = pickerWords(word, (char, index) => /[а-яё]/i.test(char)
       ? `<button class="picker-letter ${selected && index >= selected.start && index < selected.start + selected.count ? "is-selected" : ""}" type="button" data-double-index="${index}">${esc(char)}</button>`
-      : `<span class="picker-letter is-disabled">${esc(char)}</span>`).join("") : "Сначала введите слово";
+      : `<span class="picker-letter is-disabled">${esc(char)}</span>`);
+    picker.classList.toggle("empty-picker", !markup);
+    picker.innerHTML = markup || "Сначала введите слово";
     const preview = document.querySelector("#doublePreview strong");
     if (preview) preview.textContent = selected ? doubleData({ word, letter: selected.letter, start: selected.start, count: selected.count }).masked : "—";
     const submit = document.querySelector("#addDoubleButton");
@@ -585,10 +622,11 @@
     if (!picker) return;
     const chars = [...word];
     if (draftStressIndex !== null && (!chars[draftStressIndex] || !VOWELS.includes(chars[draftStressIndex].toLocaleLowerCase("ru-RU")))) draftStressIndex = null;
-    picker.classList.toggle("empty-picker", !chars.length);
-    picker.innerHTML = chars.length ? chars.map((char, index) => VOWELS.includes(char.toLocaleLowerCase("ru-RU"))
+    const markup = pickerWords(word, (char, index) => VOWELS.includes(char.toLocaleLowerCase("ru-RU"))
       ? `<button class="picker-letter ${draftStressIndex === index ? "is-selected stress-selected" : ""}" type="button" data-draft-stress="${index}">${esc(char)}</button>`
-      : `<span class="picker-letter is-disabled">${esc(char)}</span>`).join("") : "Сначала введите слово";
+      : `<span class="picker-letter is-disabled">${esc(char)}</span>`);
+    picker.classList.toggle("empty-picker", !markup);
+    picker.innerHTML = markup || "Сначала введите слово";
     const submit = document.querySelector("#addStressButton");
     if (submit) submit.disabled = !word.trim() || draftStressIndex === null;
   }
@@ -737,9 +775,9 @@
     }
     else if (action === "start-set") {
       const set = state.sets.find(entry => entry.id === view.setId);
-      startQuiz(set.items.map(item => ({ ...item, type: set.type, setId: set.id })), set.title);
-    } else if (action === "start-mistakes") startQuiz(mistakeItems(), "Повтор ошибок", "review");
-    else if (action === "start-all") startQuiz(allItems(), "Быстрый повтор", "review");
+      requestQuiz(set.items.map(item => ({ ...item, type: set.type, setId: set.id })), set.title);
+    } else if (action === "start-mistakes") requestQuiz(mistakeItems(), "Повтор ошибок", "review");
+    else if (action === "start-all") requestQuiz(allItems(), "Быстрый повтор", "review");
     else if (action === "check-text") checkAnswer(document.querySelector("#answerInput")?.value || "");
     else if (action === "next-question") {
       if (quiz.index + 1 >= quiz.items.length) navigate("result", view.setId);
@@ -765,7 +803,7 @@
       const set = state.sets.find(entry => entry.id === reviewSetId);
       const errors = set.items.filter(item => item.mistakes > 0);
       const selectedItems = errors.length ? errors : set.items;
-      startQuiz(selectedItems.map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
+      requestQuiz(selectedItems.map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
     }
   });
 
@@ -803,7 +841,9 @@
       return;
     }
     const action = event.target.closest("[data-action]")?.dataset.action;
-    if (action === "export") exportData();
+    if (action === "start-random-20") launchPendingQuiz(20);
+    else if (action === "start-all-words") launchPendingQuiz();
+    else if (action === "export") exportData();
     else if (action === "import") importFile.click();
     else if (action === "reset" && confirm("Удалить все наборы и результаты? Это действие нельзя отменить.")) {
       state = { version: 2, createdAt: new Date().toISOString(), activityDates: [], sets: [] };
