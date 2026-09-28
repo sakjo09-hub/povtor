@@ -24,6 +24,9 @@
   let draftDoubleIndex = null;
   let addedInSheet = 0;
   let pendingQuiz = null;
+  let editingItemId = null;
+  let bulkSession = null;
+  let lastDeleted = null;
 
   function uid() {
     return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -31,9 +34,10 @@
 
   function initialState() {
     return {
-      version: 2,
+      version: 3,
       createdAt: new Date().toISOString(),
       activityDates: [],
+      history: [],
       sets: [
         {
           id: uid(), title: "Слова к диктанту", type: "letters", createdAt: new Date().toISOString(),
@@ -119,6 +123,9 @@
           if (!saved.sets.some(set => set.type === "double")) saved.sets.push(defaultDoubleSet());
           localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
         }
+        if (!Array.isArray(saved.history)) saved.history = [];
+        saved.version = 3;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
         return saved;
       }
     } catch (_) {}
@@ -274,7 +281,7 @@
       ? `<div class="word-answer is-revealed">${esc(answer)}</div>`
       : `<div class="word-answer is-concealed">Ответ скрыт</div>`;
     const searchText = normalize(`${prompt || ""} ${answer || ""}`);
-    return `<div class="word-row" data-word-search="${esc(searchText)}"><div class="word-number" aria-hidden="true">${index + 1}</div><div class="word-copy"><div class="word-prompt">${esc(prompt)}</div>${answerMarkup}</div><button class="row-menu" type="button" aria-label="Удалить слово" data-delete-item="${esc(item.id)}">×</button></div>`;
+    return `<div class="word-row" data-word-search="${esc(searchText)}"><div class="word-number" aria-hidden="true">${index + 1}</div><div class="word-copy"><div class="word-prompt">${esc(prompt)}</div>${answerMarkup}</div><div class="row-actions"><button class="row-action edit" type="button" aria-label="Изменить слово" data-edit-item="${esc(item.id)}">✎</button><button class="row-action delete" type="button" aria-label="Удалить слово" data-delete-item="${esc(item.id)}">×</button></div></div>`;
   }
 
   function renderReview() {
@@ -320,7 +327,15 @@
         if (setProgress.untouched) details.push(`${setProgress.untouched} не проходили`);
         return `<button class="stat-set-row" type="button" data-open-set="${set.id}"><span><strong>${esc(set.title)}</strong><small>${details.join(" · ")}</small></span><span class="stat-set-end">${setProgress.needsRepeat ? `<span class="repeat-pill">${setProgress.needsRepeat} повторить</span>` : `<span class="ready-mark">${setProgress.words && !setProgress.untouched ? "Готово" : ""}</span>`}<span class="chevron">›</span></span></button>`;
       }).join("") : `<p class="subtext">Создайте первый набор, чтобы здесь появилась статистика.</p>`}</div>
+      <div class="section-head"><h2>Последние тренировки</h2></div>
+      ${state.history?.length ? `<div class="history-list">${state.history.slice(0, 12).map(entry => `<div class="history-row"><span class="history-mark">✓</span><span class="history-copy"><strong>${esc(entry.title)}</strong><small>${formatHistoryDate(entry.date)}</small></span><span class="history-score">${entry.correct} из ${entry.total}<small>${entry.percent}%</small></span></div>`).join("")}</div>` : `<div class="history-empty">После первой тренировки здесь появится результат.</div>`}
     `;
+  }
+
+  function formatHistoryDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
   }
 
   function startQuiz(items, title, source = "set") {
@@ -345,20 +360,28 @@
 
   function requestQuiz(items, title, source = "set") {
     if (!items.length) return toast("В этом наборе пока нет слов");
-    if (items.length <= 20) return startQuiz(items, title, source);
+    if (items.length <= 5) return startQuiz(items, title, source);
     pendingQuiz = { items, title, source };
+    const sizes = [5, 10, 20].filter(size => size <= items.length);
+    const newCount = items.filter(item => !item.attempts).length;
+    const mistakeCount = items.filter(item => item.mistakes > 0).length;
     openSheet(`<div class="sheet-head"><div><p class="eyebrow">Выберите объём</p><h2>Начать тренировку</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>
-      <p class="subtext quiz-size-copy">В наборе ${items.length} ${wordForm(items.length, ["слово", "слова", "слов"])}. Можно пройти короткую случайную подборку или весь набор.</p>
+      <p class="subtext quiz-size-copy">В наборе ${items.length} ${wordForm(items.length, ["слово", "слова", "слов"])}. Короткие варианты выбираются случайно.</p>
       <div class="quiz-size-list">
-        <button class="quiz-size-option is-primary" type="button" data-action="start-random-20"><span class="quiz-size-badge">20</span><span><strong>20 случайных слов</strong><small>Новая подборка при каждом запуске</small></span></button>
-        <button class="quiz-size-option" type="button" data-action="start-all-words"><span class="quiz-size-badge">${items.length}</span><span><strong>Все слова</strong><small>Пройти набор целиком</small></span></button>
-      </div>`);
+        ${sizes.map((size, index) => `<button class="quiz-size-option ${index === 0 ? "is-primary" : ""}" type="button" data-quiz-limit="${size}"><span class="quiz-size-badge">${size}</span><span><strong>${size} случайных слов</strong><small>Быстрая тренировка</small></span></button>`).join("")}
+        <button class="quiz-size-option" type="button" data-quiz-limit="all"><span class="quiz-size-badge">${items.length}</span><span><strong>Все слова</strong><small>Пройти набор целиком</small></span></button>
+      </div>
+      <form class="custom-quiz-form" id="customQuizForm"><label for="customQuizCount">Своё количество</label><div><input id="customQuizCount" name="count" type="number" inputmode="numeric" min="1" max="${items.length}" placeholder="Например, 12" required><button class="secondary-btn" type="submit">Начать</button></div></form>
+      ${source !== "review" && (newCount || mistakeCount) ? `<div class="quiz-filter-block"><span class="field-label">Или выбрать по состоянию</span>${newCount ? `<button class="filter-option" type="button" data-quiz-filter="new"><span>Только новые</span><strong>${newCount}</strong></button>` : ""}${mistakeCount ? `<button class="filter-option" type="button" data-quiz-filter="mistakes"><span>Только ошибки</span><strong>${mistakeCount}</strong></button>` : ""}</div>` : ""}`);
   }
 
-  function launchPendingQuiz(limit = null) {
+  function launchPendingQuiz(limit = null, filter = "all") {
     if (!pendingQuiz) return;
     const { items, title, source } = pendingQuiz;
-    const selected = limit ? shuffle(items.map(item => ({ ...item }))).slice(0, limit) : items;
+    let pool = items;
+    if (filter === "new") pool = items.filter(item => !item.attempts);
+    if (filter === "mistakes") pool = items.filter(item => item.mistakes > 0);
+    const selected = limit ? shuffle(pool.map(item => ({ ...item }))).slice(0, limit) : pool;
     closeSheet();
     startQuiz(selected, title, source);
   }
@@ -521,6 +544,11 @@
     const wrongWords = quiz.wrongItemIds?.length || 0;
     const correctFirstTry = Math.max(0, totalWords - wrongWords);
     const correctPercent = totalWords ? Math.round(correctFirstTry / totalWords * 100) : 0;
+    if (!quiz.historySaved) {
+      state.history = [{ id: uid(), date: new Date().toISOString(), title: quiz.title, total: totalWords, correct: correctFirstTry, percent: correctPercent }, ...(state.history || [])].slice(0, 30);
+      quiz.historySaved = true;
+      saveState();
+    }
     app.innerHTML = `<section class="result-wrap"><div class="result-card">
       <div class="result-check" aria-hidden="true">✓</div>
       <p class="eyebrow">Тренировка завершена</p>
@@ -571,53 +599,166 @@
     return `<div class="type-option"><input id="type-${type}" type="radio" name="type" value="${type}" ${checked ? "checked" : ""}/><label for="type-${type}"><span class="set-icon ${info.className}">${info.icon}</span><span class="type-copy"><strong>${info.title}</strong><span>${descriptions[type]}</span></span><span class="radio-dot"></span></label></div>`;
   }
 
-  function showAddWords() {
+  function showAddWords(itemId = null, fromBulk = false) {
     const set = state.sets.find(entry => entry.id === view.setId);
     if (!set) return;
+    editingItemId = itemId;
+    const existing = itemId ? set.items.find(item => item.id === itemId) : null;
+    const bulkRaw = fromBulk ? bulkSession?.entries[bulkSession.index] || "" : "";
     draftHidden = [];
     draftStressIndex = null;
     draftDoubleIndex = null;
-    const commonHead = `<div class="sheet-head"><div><p class="eyebrow">${typeInfo[set.type].title}</p><h2>Добавить слово</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>`;
+    let initialWord = "";
+    if (existing && set.type === "letters") { const data = letterData(existing); initialWord = data.word; draftHidden = data.hidden; }
+    if (existing && set.type === "double") { const data = doubleData(existing); initialWord = data.word; draftDoubleIndex = data.start; }
+    if (existing && set.type === "stress") { initialWord = existing.plain; draftStressIndex = Number(existing.stressIndex); }
+    if (fromBulk && set.type !== "spelling") {
+      const chars = [...bulkRaw.normalize("NFC")];
+      const marked = chars.map((char, index) => /[А-ЯЁ]/.test(char) ? index : -1).filter(index => index >= 0);
+      initialWord = chars.join("").toLocaleLowerCase("ru-RU");
+      if (set.type === "letters") draftHidden = marked;
+      if (set.type === "double") draftDoubleIndex = marked[0] ?? null;
+      if (set.type === "stress") draftStressIndex = marked.find(index => VOWELS.includes(chars[index]?.toLocaleLowerCase("ru-RU"))) ?? null;
+    }
+    const title = existing ? "Изменить слово" : fromBulk ? `Слово ${bulkSession.index + 1} из ${bulkSession.entries.length}` : "Добавить слово";
+    const commonHead = `<div class="sheet-head"><div><p class="eyebrow">${typeInfo[set.type].title}</p><h2>${title}</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>`;
+    const submitLabel = existing ? "Сохранить" : fromBulk ? "Готово, дальше" : "Добавить слово";
+    const footer = existing ? "" : fromBulk ? bulkStepFooter() : addedFooter();
     if (set.type === "letters") {
       openSheet(`${commonHead}<form id="addLettersForm">
-        <div class="field"><label for="letterWord">Слово целиком</label><input id="letterWord" name="word" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, багаж" required /><p class="field-hint">Пишется только один раз — без подчёркиваний и знака «равно».</p></div>
+        <div class="field"><label for="letterWord">Слово целиком</label><input id="letterWord" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, багаж" required /><p class="field-hint">Нажмите на одну или несколько букв, которые нужно пропустить.</p></div>
         <div class="field"><span class="field-label">Нажмите на буквы, которые нужно спрятать</span><div class="letter-picker empty-picker" id="letterPicker">Сначала введите слово</div></div>
         <div class="add-preview" id="addPreview"><span>В задании будет:</span><strong>—</strong></div>
-        <button class="primary-btn full-width" id="addWordButton" type="submit" disabled>Добавить слово</button>
-      </form>${addedFooter()}`);
+        <button class="primary-btn full-width" id="addWordButton" type="submit" disabled>${submitLabel}</button>
+      </form>${footer}`);
+      renderLetterPicker(initialWord);
       setTimeout(() => document.querySelector("#letterWord")?.focus(), 100);
     } else if (set.type === "double") {
       openSheet(`${commonHead}<form id="addDoubleForm">
-        <div class="field"><label for="doubleWord">Слово целиком</label><input id="doubleWord" name="word" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, деревянный" required /><p class="field-hint">Нажмите на букву — если она двойная, выделятся сразу обе.</p></div>
+        <div class="field"><label for="doubleWord">Слово целиком</label><input id="doubleWord" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, деревянный" required /><p class="field-hint">Нажмите на букву — если она двойная, выделятся сразу обе.</p></div>
         <div class="field"><span class="field-label">Какую букву проверять?</span><div class="letter-picker empty-picker" id="doublePicker">Сначала введите слово</div></div>
         <div class="add-preview" id="doublePreview"><span>В задании будет:</span><strong>—</strong></div>
-        <button class="primary-btn full-width" id="addDoubleButton" type="submit" disabled>Добавить слово</button>
-      </form>${addedFooter()}`);
+        <button class="primary-btn full-width" id="addDoubleButton" type="submit" disabled>${submitLabel}</button>
+      </form>${footer}`);
+      renderDoublePicker(initialWord);
       setTimeout(() => document.querySelector("#doubleWord")?.focus(), 100);
     } else if (set.type === "spelling") {
+      const spelling = spellingParts(existing, bulkRaw);
       openSheet(`${commonHead}<form id="addSpellingForm">
-        <div class="split-fields"><div class="field"><label for="spellingPart1">Первая часть</label><input id="spellingPart1" name="part1" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="в" required /></div><div class="join-mark">+</div><div class="field"><label for="spellingPart2">Вторая часть</label><input id="spellingPart2" name="part2" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="общем" required /></div></div>
+        ${fromBulk && !spelling.first ? `<div class="field"><span class="field-label">Нажмите между частями слова</span><div class="boundary-picker">${boundaryButtons(bulkRaw)}</div></div>` : ""}
+        <div class="split-fields"><div class="field"><label for="spellingPart1">Первая часть</label><input id="spellingPart1" name="part1" value="${esc(spelling.first)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="в" required /></div><div class="join-mark">+</div><div class="field"><label for="spellingPart2">Вторая часть</label><input id="spellingPart2" name="part2" value="${esc(spelling.second)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="общем" required /></div></div>
         <div class="field"><span class="field-label">Как пишется правильно?</span><div class="segmented-control">
-          <label><input type="radio" name="answer" value="together" checked><span>Слитно</span></label>
-          <label><input type="radio" name="answer" value="separate"><span>Раздельно</span></label>
-          <label><input type="radio" name="answer" value="hyphen"><span>Через дефис</span></label>
+          <label><input type="radio" name="answer" value="together" ${spelling.answer === "together" ? "checked" : ""}><span>Слитно</span></label>
+          <label><input type="radio" name="answer" value="separate" ${spelling.answer === "separate" ? "checked" : ""}><span>Раздельно</span></label>
+          <label><input type="radio" name="answer" value="hyphen" ${spelling.answer === "hyphen" ? "checked" : ""}><span>Через дефис</span></label>
         </div></div>
         <div class="add-preview" id="spellingPreview"><span>Правильный ответ:</span><strong>—</strong></div>
-        <button class="primary-btn full-width" type="submit">Добавить слово</button>
-      </form>${addedFooter()}`);
+        <button class="primary-btn full-width" type="submit">${submitLabel}</button>
+      </form>${footer}`);
+      updateSpellingPreview();
       setTimeout(() => document.querySelector("#spellingPart1")?.focus(), 100);
     } else {
       openSheet(`${commonHead}<form id="addStressForm">
-        <div class="field"><label for="stressWordInput">Слово</label><input id="stressWordInput" name="word" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, звонит" required /><p class="field-hint">Напишите слово обычно, затем нажмите на ударную гласную.</p></div>
+        <div class="field"><label for="stressWordInput">Слово</label><input id="stressWordInput" name="word" value="${esc(initialWord)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Например, звонит" required /><p class="field-hint">Напишите слово обычно, затем нажмите на ударную гласную.</p></div>
         <div class="field"><span class="field-label">Куда падает ударение?</span><div class="letter-picker empty-picker" id="stressPicker">Сначала введите слово</div></div>
-        <button class="primary-btn full-width" id="addStressButton" type="submit" disabled>Добавить слово</button>
-      </form>${addedFooter()}`);
+        <button class="primary-btn full-width" id="addStressButton" type="submit" disabled>${submitLabel}</button>
+      </form>${footer}`);
+      renderStressPicker(initialWord);
       setTimeout(() => document.querySelector("#stressWordInput")?.focus(), 100);
     }
   }
 
   function addedFooter() {
-    return `<div class="added-footer"><span id="addedCount">Можно добавить несколько слов подряд</span><button class="text-btn" type="button" data-close-sheet>Готово</button></div>`;
+    return `<button class="bulk-open-btn full-width" type="button" data-action="bulk-add">Вставить сразу список слов</button><div class="added-footer"><span id="addedCount">Можно добавить несколько слов подряд</span><button class="text-btn" type="button" data-close-sheet>Готово</button></div>`;
+  }
+
+  function bulkStepFooter() {
+    return `<div class="bulk-step-footer"><button class="text-btn" type="button" data-action="bulk-back" ${bulkSession.index ? "" : "disabled"}>Назад</button><button class="text-btn muted-action" type="button" data-action="bulk-skip">Пропустить</button></div>`;
+  }
+
+  function spellingParts(existing, raw = "") {
+    if (existing) {
+      const [first = "", ...rest] = String(existing.prompt || "").split("/");
+      return { first, second: rest.join("/"), answer: existing.answer || "together" };
+    }
+    const clean = String(raw).trim();
+    if (clean.includes("/")) { const [first, ...rest] = clean.split("/"); return { first, second: rest.join("/"), answer: "together" }; }
+    if (/\s/.test(clean)) { const [first, ...rest] = clean.split(/\s+/); return { first, second: rest.join(" "), answer: "separate" }; }
+    if (clean.includes("-")) { const [first, ...rest] = clean.split("-"); return { first, second: rest.join("-"), answer: "hyphen" }; }
+    return { first: "", second: "", answer: "together" };
+  }
+
+  function boundaryButtons(word) {
+    const chars = [...String(word).toLocaleLowerCase("ru-RU")];
+    return chars.map((char, index) => `${esc(char)}${index < chars.length - 1 ? `<button type="button" data-spelling-boundary="${index + 1}" aria-label="Разделить после буквы ${esc(char)}">·</button>` : ""}`).join("");
+  }
+
+  function showBulkAdd() {
+    const set = state.sets.find(entry => entry.id === view.setId);
+    if (!set) return;
+    editingItemId = null;
+    const separators = set.type === "spelling" ? "Переносите выражения на новую строку или разделяйте запятыми." : "Можно разделять пробелами, запятыми или переносами строк.";
+    const hint = set.type === "letters" ? "Заглавными отметьте пропуски: привИлегия." : set.type === "double" ? "Заглавными отметьте проверяемые буквы: деревяННый." : set.type === "stress" ? "Заглавной отметьте ударение: звонИт." : "Пробел и дефис распознаются автоматически; в слитном слове затем выберите границу.";
+    openSheet(`<div class="sheet-head"><div><p class="eyebrow">Быстрое добавление</p><h2>Вставить список</h2></div><button class="close-btn" type="button" data-close-sheet>×</button></div>
+      <form id="bulkInputForm"><div class="field"><label for="bulkInput">Слова или выражения</label><textarea id="bulkInput" name="words" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Вставьте сюда список" required></textarea><p class="field-hint">${separators} ${hint} Нумерацию и повторы приложение уберёт само.</p></div><div class="bulk-found" id="bulkFound">Пока ничего не найдено</div><button class="primary-btn full-width" type="submit">Разобрать список</button></form>`);
+    setTimeout(() => document.querySelector("#bulkInput")?.focus(), 100);
+  }
+
+  function parseBulkEntries(text, type) {
+    const withoutNumbers = String(text).replace(/(^|\n)\s*(?:\d+[.)]|[-•])\s*/g, "$1");
+    const parts = type === "spelling" ? withoutNumbers.split(/[\n,;]+/) : withoutNumbers.split(/[\s,;]+/);
+    const seen = new Set();
+    return parts.map(value => value.trim()).filter(value => {
+      if (!value) return false;
+      if (type !== "spelling" && /^(?:\d+[.)]|[-•])$/.test(value)) return false;
+      const key = normalize(value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function showBulkStep() {
+    if (!bulkSession || bulkSession.index >= bulkSession.entries.length) return commitBulkItems();
+    showAddWords(null, true);
+  }
+
+  function commitBulkItems() {
+    const session = bulkSession;
+    const set = state.sets.find(entry => entry.id === session?.setId);
+    if (!session || !set) return closeSheet();
+    let added = 0;
+    let skipped = session.entries.length - session.prepared.filter(Boolean).length;
+    session.prepared.filter(Boolean).forEach(item => {
+      if (set.items.some(existing => itemKey(set.type, existing) === itemKey(set.type, item))) skipped += 1;
+      else { set.items.push(item); added += 1; }
+    });
+    bulkSession = null;
+    saveState(); closeSheet(); render();
+    toast(added ? `Добавлено: ${added}${skipped ? ` · пропущено: ${skipped}` : ""}` : "Новых слов не найдено");
+  }
+
+  function storePreparedItem(set, item) {
+    if (bulkSession) {
+      bulkSession.prepared[bulkSession.index] = item;
+      bulkSession.index += 1;
+      showBulkStep();
+      return "closed";
+    }
+    if (editingItemId) {
+      const index = set.items.findIndex(entry => entry.id === editingItemId);
+      if (index < 0) return "closed";
+      if (set.items.some((entry, entryIndex) => entryIndex !== index && itemKey(set.type, entry) === itemKey(set.type, item))) {
+        toast("Такое задание уже есть в наборе");
+        return "duplicate";
+      }
+      const old = set.items[index];
+      set.items[index] = { ...item, id: old.id, attempts: old.attempts || 0, correct: old.correct || 0, mistakes: old.mistakes || 0, lastAnsweredAt: old.lastAnsweredAt || null };
+      editingItemId = null;
+      saveState(); closeSheet(); render(); toast("Изменения сохранены");
+      return "closed";
+    }
+    return addUniqueItem(set, item) ? "added" : "duplicate";
   }
 
   function showSetMenu() {
@@ -650,6 +791,8 @@
     modalLayer.setAttribute("aria-hidden", "true");
     modalLayer.innerHTML = "";
     pendingQuiz = null;
+    editingItemId = null;
+    bulkSession = null;
   }
 
   function pickerWords(word, renderCharacter) {
@@ -824,12 +967,12 @@
     app.focus({ preventScroll: true });
   }
 
-  function toast(message) {
+  function toast(message, action = null) {
     const node = document.createElement("div");
     node.className = "toast";
-    node.textContent = message;
+    node.innerHTML = `<span>${esc(message)}</span>${action ? `<button type="button" data-toast-action="${esc(action.id)}">${esc(action.label)}</button>` : ""}`;
     document.querySelector("#toastRegion").append(node);
-    setTimeout(() => node.remove(), 2800);
+    setTimeout(() => node.remove(), action ? 5000 : 2800);
   }
 
   function exportData() {
@@ -871,6 +1014,9 @@
     else if (action === "repeat-quiz") startQuiz(quiz.baseItems || quiz.items, quiz.title, quiz.source);
     else if (action === "show-quiz-errors") showQuizErrors();
 
+    const editId = event.target.closest("[data-edit-item]")?.dataset.editItem;
+    if (editId) return showAddWords(editId);
+
     const choice = event.target.closest("[data-choice]")?.dataset.choice;
     if (choice) checkAnswer(choice);
     const letterChoice = event.target.closest("[data-letter-choice]")?.dataset.letterChoice;
@@ -882,7 +1028,12 @@
     const deleteId = event.target.closest("[data-delete-item]")?.dataset.deleteItem;
     if (deleteId) {
       const set = state.sets.find(entry => entry.id === view.setId);
-      if (set && confirm("Удалить это слово из набора?")) { set.items = set.items.filter(item => item.id !== deleteId); saveState(); render(); }
+      const index = set?.items.findIndex(item => item.id === deleteId) ?? -1;
+      if (set && index >= 0) {
+        lastDeleted = { setId: set.id, item: set.items[index], index };
+        set.items.splice(index, 1); saveState(); render();
+        toast("Слово удалено", { id: "undo-delete", label: "Вернуть" });
+      }
     }
     const reviewSetId = event.target.closest("[data-review-set]")?.dataset.reviewSet;
     if (reviewSetId) {
@@ -890,6 +1041,17 @@
       const errors = set.items.filter(item => item.mistakes > 0);
       requestQuiz(errors.map(item => ({...item, type: set.type, setId: set.id})), set.title, "review");
     }
+  });
+
+  document.querySelector("#toastRegion").addEventListener("click", event => {
+    if (event.target.closest("[data-toast-action]")?.dataset.toastAction !== "undo-delete" || !lastDeleted) return;
+    const set = state.sets.find(entry => entry.id === lastDeleted.setId);
+    if (set && !set.items.some(item => item.id === lastDeleted.item.id)) {
+      set.items.splice(Math.min(lastDeleted.index, set.items.length), 0, lastDeleted.item);
+      saveState(); render(); toast("Слово возвращено");
+    }
+    lastDeleted = null;
+    event.target.closest(".toast")?.remove();
   });
 
   app.addEventListener("keydown", event => {
@@ -940,13 +1102,28 @@
       renderDoublePicker(document.querySelector("#doubleWord")?.value || "");
       return;
     }
+    const boundary = event.target.closest("[data-spelling-boundary]")?.dataset.spellingBoundary;
+    if (boundary !== undefined && bulkSession) {
+      const word = bulkSession.entries[bulkSession.index].toLocaleLowerCase("ru-RU");
+      const index = Number(boundary);
+      document.querySelector("#spellingPart1").value = [...word].slice(0, index).join("");
+      document.querySelector("#spellingPart2").value = [...word].slice(index).join("");
+      document.querySelectorAll("[data-spelling-boundary]").forEach(button => button.classList.toggle("is-selected", button.dataset.spellingBoundary === boundary));
+      updateSpellingPreview();
+      return;
+    }
+    const quizLimit = event.target.closest("[data-quiz-limit]")?.dataset.quizLimit;
+    if (quizLimit) return launchPendingQuiz(quizLimit === "all" ? null : Number(quizLimit));
+    const quizFilter = event.target.closest("[data-quiz-filter]")?.dataset.quizFilter;
+    if (quizFilter) return launchPendingQuiz(null, quizFilter);
     const action = event.target.closest("[data-action]")?.dataset.action;
-    if (action === "start-random-20") launchPendingQuiz(20);
-    else if (action === "start-all-words") launchPendingQuiz();
+    if (action === "bulk-add") showBulkAdd();
+    else if (action === "bulk-back" && bulkSession?.index) { bulkSession.index -= 1; showBulkStep(); }
+    else if (action === "bulk-skip" && bulkSession) { bulkSession.prepared[bulkSession.index] = null; bulkSession.index += 1; showBulkStep(); }
     else if (action === "export") exportData();
     else if (action === "import") importFile.click();
     else if (action === "reset" && confirm("Удалить все наборы и результаты? Это действие нельзя отменить.")) {
-      state = { version: 2, createdAt: new Date().toISOString(), activityDates: [], sets: [] };
+      state = { version: 3, createdAt: new Date().toISOString(), activityDates: [], history: [], sets: [] };
       saveState(); closeSheet(); navigate("home"); toast("Все данные удалены");
     } else if (action === "delete-set" && confirm("Удалить набор вместе со словами и статистикой?")) {
       state.sets = state.sets.filter(set => set.id !== view.setId); saveState(); closeSheet(); navigate("home"); toast("Набор удалён");
@@ -958,6 +1135,12 @@
     else if (event.target.id === "doubleWord") renderDoublePicker(event.target.value);
     else if (event.target.id === "stressWordInput") renderStressPicker(event.target.value);
     else if (event.target.id === "spellingPart1" || event.target.id === "spellingPart2") updateSpellingPreview();
+    else if (event.target.id === "bulkInput") {
+      const set = state.sets.find(entry => entry.id === view.setId);
+      const count = parseBulkEntries(event.target.value, set?.type).length;
+      const output = document.querySelector("#bulkFound");
+      if (output) output.textContent = count ? `Найдено: ${count} ${wordForm(count, ["позиция", "позиции", "позиций"])}` : "Пока ничего не найдено";
+    }
   });
 
   modalLayer.addEventListener("change", event => {
@@ -975,7 +1158,7 @@
       const set = state.sets.find(entry => entry.id === view.setId);
       const word = new FormData(form).get("word").trim();
       if (!word || !draftHidden.length) return toast("Выберите хотя бы одну букву для пропуска");
-      if (!addUniqueItem(set, makeLettersItem(word, draftHidden))) return;
+      if (storePreparedItem(set, makeLettersItem(word, draftHidden)) !== "added") return;
       form.reset(); draftHidden = []; renderLetterPicker(""); document.querySelector("#letterWord")?.focus();
     } else if (form.id === "addDoubleForm") {
       const set = state.sets.find(entry => entry.id === view.setId);
@@ -983,7 +1166,7 @@
       if (!word || draftDoubleIndex === null) return toast("Нажмите на букву, которую нужно проверить");
       const run = doubleRun(word, draftDoubleIndex);
       if (run.count > 2) return toast("В этом месте больше двух одинаковых букв");
-      if (!addUniqueItem(set, makeDoubleItem(word, draftDoubleIndex))) return;
+      if (storePreparedItem(set, makeDoubleItem(word, draftDoubleIndex)) !== "added") return;
       form.reset(); draftDoubleIndex = null; renderDoublePicker(""); document.querySelector("#doubleWord")?.focus();
     } else if (form.id === "addSpellingForm") {
       const set = state.sets.find(entry => entry.id === view.setId);
@@ -991,14 +1174,23 @@
       const first = data.get("part1").trim();
       const second = data.get("part2").trim();
       if (!first || !second) return;
-      if (!addUniqueItem(set, makeItem({ prompt: `${first}/${second}`, answer: data.get("answer") }))) return;
+      if (storePreparedItem(set, makeItem({ prompt: `${first}/${second}`, answer: data.get("answer") })) !== "added") return;
       form.reset(); document.querySelector("input[name='answer'][value='together']").checked = true; updateSpellingPreview(); document.querySelector("#spellingPart1")?.focus();
     } else if (form.id === "addStressForm") {
       const set = state.sets.find(entry => entry.id === view.setId);
       const word = new FormData(form).get("word").trim().toLocaleLowerCase("ru-RU");
       if (!word || draftStressIndex === null) return toast("Нажмите на ударную гласную");
-      if (!addUniqueItem(set, makeItem({ plain: word, stressIndex: draftStressIndex }))) return;
+      if (storePreparedItem(set, makeItem({ plain: word, stressIndex: draftStressIndex })) !== "added") return;
       form.reset(); draftStressIndex = null; renderStressPicker(""); document.querySelector("#stressWordInput")?.focus();
+    } else if (form.id === "bulkInputForm") {
+      const set = state.sets.find(entry => entry.id === view.setId);
+      const entries = parseBulkEntries(new FormData(form).get("words"), set.type);
+      if (!entries.length) return toast("Не удалось найти слова");
+      bulkSession = { setId: set.id, entries, prepared: [], index: 0 };
+      showBulkStep();
+    } else if (form.id === "customQuizForm") {
+      const count = Math.max(1, Math.min(pendingQuiz?.items.length || 1, Number(new FormData(form).get("count")) || 1));
+      launchPendingQuiz(count);
     } else if (form.id === "renameSetForm") {
       const set = state.sets.find(entry => entry.id === view.setId);
       set.title = new FormData(form).get("title").trim(); saveState(); closeSheet(); render(); toast("Название сохранено");
@@ -1019,6 +1211,9 @@
     try {
       const parsed = JSON.parse(await file.text());
       if (!parsed || !Array.isArray(parsed.sets)) throw new Error("bad format");
+      parsed.history = Array.isArray(parsed.history) ? parsed.history : [];
+      parsed.activityDates = Array.isArray(parsed.activityDates) ? parsed.activityDates : [];
+      parsed.version = 3;
       state = parsed; saveState(); closeSheet(); navigate("home"); toast("Данные восстановлены");
     } catch (_) { toast("Не удалось открыть резервную копию"); }
     importFile.value = "";
