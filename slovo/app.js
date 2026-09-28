@@ -517,18 +517,12 @@
     const totalWords = quiz.baseItems?.length || quiz.items.length;
     const wrongWords = quiz.wrongItemIds?.length || 0;
     const correctFirstTry = Math.max(0, totalWords - wrongWords);
-    const wrongAttempts = quiz.wrongAttempts || 0;
-    const wrongPercent = totalWords ? Math.round(wrongWords / totalWords * 100) : 0;
-    const message = wrongWords ? "Слова с ошибками уже повторены до правильного ответа." : "Отлично — ни одной ошибки.";
+    const correctPercent = totalWords ? Math.round(correctFirstTry / totalWords * 100) : 0;
     app.innerHTML = `<section class="result-wrap"><div class="result-card">
       <div class="result-check" aria-hidden="true">✓</div>
-      <p class="eyebrow">Тренировка завершена</p><h1>Готово</h1><p>${message}</p>
-      <div class="result-stats" aria-label="Статистика тренировки">
-        <div class="result-stat is-correct"><strong>${correctFirstTry}</strong><span>Правильно<small>с первого раза</small></span></div>
-        <div class="result-stat is-wrong"><strong>${wrongWords}</strong><span>Неправильно<small>слов</small></span></div>
-        <div class="result-stat"><strong>${wrongAttempts}</strong><span>Ошибок<small>всего</small></span></div>
-        <div class="result-stat"><strong>${wrongPercent}%</strong><span>Неправильных<small>от всех слов</small></span></div>
-      </div>
+      <p class="eyebrow">Тренировка завершена</p>
+      <div class="result-score" aria-label="${correctFirstTry} из ${totalWords} правильно"><strong>${correctFirstTry}<span> из ${totalWords}</span></strong><p>правильно с первого раза</p></div>
+      <div class="result-percent"><strong>${correctPercent}%</strong><span>правильно</span></div>
       ${wrongWords ? `<button class="result-errors-btn full-width" type="button" data-action="show-quiz-errors">Посмотреть ошибки</button>` : ""}
       <div class="button-row"><button class="secondary-btn" type="button" data-action="finish-quiz">К наборам</button><button class="primary-btn" type="button" data-action="repeat-quiz">Пройти ещё раз</button></div>
     </div></section>`;
